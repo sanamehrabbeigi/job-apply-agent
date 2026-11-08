@@ -12,12 +12,13 @@ dependencies = [
     "claude-agent-sdk>=0.2.170",
     # Bundles the pandoc binary, so DOCX <-> Markdown works without a system install.
     "pypandoc-binary>=1.13",
+    "python-docx>=1.1",
 ]
 
 [project.optional-dependencies]
 # DOCX -> PDF through Microsoft Word (Windows/macOS) when LibreOffice is not installed.
 word = ["docx2pdf>=0.1.8"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "python-docx>=1.1"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.scripts]
 job-agent = "job_apply_agent.cli:main"

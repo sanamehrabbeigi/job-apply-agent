@@ -56,7 +56,26 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--model", help="Claude model alias or ID (default: your account's default).")
     t.add_argument("--instructions", help="Extra instructions, e.g. 'Keep it to one page.'")
     t.add_argument("--quiet", action="store_true", help="Don't print agent progress.")
+
+    r = sub.add_parser("render", help="Re-create the .docx/.pdf from a (hand-edited) resume .md file.")
+    r.add_argument("markdown", type=Path, help="Resume Markdown file, e.g. output/.../Name_Resume_Company.md")
+    r.add_argument("--formats", type=parse_formats, default=["docx", "pdf"], help="docx,pdf (default: both)")
+    r.add_argument("--reference", type=Path, help="Your original .docx resume (page margins are copied).")
     return parser
+
+
+def run_render(args: argparse.Namespace) -> int:
+    if not args.markdown.is_file():
+        raise FileNotFoundError(f"Markdown file not found: {args.markdown}")
+    docx_path = write_docx(args.markdown.read_text(encoding="utf-8"), args.markdown.with_suffix(".docx"), args.reference)
+    saved = [docx_path] if "docx" in args.formats else []
+    if "pdf" in args.formats:
+        saved.append(docx_to_pdf(docx_path))
+        if "docx" not in args.formats:
+            docx_path.unlink(missing_ok=True)
+    for path in saved:
+        print(f"Saved {path}")
+    return 0
 
 
 def save_outputs(
@@ -130,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "tailor":
             return asyncio.run(run_tailor(args))
+        if args.command == "render":
+            return run_render(args)
     except (FileNotFoundError, ConversionError, TailoringError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

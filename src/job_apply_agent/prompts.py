@@ -26,11 +26,26 @@ same length as the original or shorter, ideally 1-2 pages).
 6. Keep the contact details and the candidate's name exactly as they are.
 
 ## Output format for `tailored_resume_markdown`
-ATS-friendly GitHub-flavored Markdown that converts cleanly to Word:
-- `# Full Name` on the first line, then contact details on one line separated by " | ".
-- `## Section` for sections (Summary, Skills, Experience, Education, Projects, ...).
-- `### Job Title — Company` for each role, then a line with *location | dates*.
-- Plain `-` bullets. No tables, columns, images, emojis, or HTML.
+Use exactly this Markdown dialect; it is rendered into a Word/PDF resume:
+
+    # Full Name
+    email | phone | linkedin.com/in/... | github.com/...
+
+    ## Summary
+    Two to four lines of plain text.
+
+    ## Experience
+    ### Job Title | MM/YYYY - MM/YYYY
+    *Company | City, Province*
+    - Bullet starting with a strong verb.
+
+    ## Skills
+    - **Category:** item, item, item
+
+Rules: `##` for sections, `### Title | Dates` for every role, degree or project (dates \
+after the last " | ", leave them off if unknown), one italic line for the organization, \
+`-` bullets. Use **bold** sparingly. No tables, links, images, emojis or HTML. Write \
+contact links as plain text (e.g. linkedin.com/in/name).
 """
 
 TAILOR_USER_PROMPT = """\

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from docx.shared import Inches
 
 from job_apply_agent.documents import ConversionError, _find_soffice, docx_to_pdf, read_resume, write_docx
 
@@ -29,18 +30,25 @@ def test_read_resume_errors(tmp_path: Path):
         read_resume(bad)
 
 
-def test_write_docx_uses_reference_styles(tmp_path: Path, sample_resume_docx: Path, sample_resume_md: str):
-    # Give the reference resume a distinctive body font; the output should inherit it.
+def test_write_docx_renders_resume_layout(tmp_path: Path, sample_resume_docx: Path, sample_resume_md: str):
+    # The output takes its page margins from the user's own resume.
     ref = Document(sample_resume_docx)
-    ref.styles["Normal"].font.name = "Georgia"
+    ref.sections[0].left_margin = Inches(0.6)
     ref.save(sample_resume_docx)
 
     out = write_docx(sample_resume_md, tmp_path / "out" / "tailored.docx", reference_docx=sample_resume_docx)
     doc = Document(out)
-    texts = [p.text for p in doc.paragraphs]
-    assert "Alex Rivera" in texts
-    assert any("Tableau dashboards" in t for t in texts)
-    assert doc.styles["Normal"].font.name == "Georgia"
+    paras = doc.paragraphs
+    texts = [p.text for p in paras]
+
+    assert texts[0] == "ALEX RIVERA"  # centered, uppercase name
+    assert "alex.rivera@example.com" in "".join(r.text for r in paras[1]._p.iter() if hasattr(r, "text") and r.text)
+    assert "EXPERIENCE" in texts
+    assert "Data Analyst\tJan 2023 – Present" in texts  # dates after a right-aligned tab
+    assert "Northwind Retail | Toronto, ON" in texts
+    bullets = [p for p in paras if p.style.name == "List Bullet"]
+    assert any("Tableau dashboards" in p.text for p in bullets)
+    assert round(doc.sections[0].left_margin.inches, 2) == 0.6
 
 
 @pytest.mark.skipif(_find_soffice() is None, reason="LibreOffice not installed")

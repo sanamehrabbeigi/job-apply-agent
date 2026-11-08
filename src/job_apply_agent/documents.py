@@ -1,8 +1,8 @@
 """Reading and writing resume documents.
 
 - DOCX -> Markdown with pandoc (bundled via ``pypandoc-binary``), so Claude reads clean text.
-- Markdown -> DOCX with pandoc. Your original resume is used as the *reference document*,
-  so the output reuses its styles (fonts, heading styles, sizes).
+- Markdown -> DOCX with our own renderer (``render.py``): a clean, classic single-column
+  layout; page margins are taken from your original resume.
 - DOCX -> PDF with LibreOffice (``soffice``) if installed, otherwise Microsoft Word
   through the optional ``docx2pdf`` package.
 """
@@ -15,6 +15,8 @@ import tempfile
 from pathlib import Path
 
 import pypandoc
+
+from .render import render_resume_docx
 
 
 class ConversionError(RuntimeError):
@@ -40,14 +42,8 @@ def read_resume(path: str | Path) -> str:
 
 
 def write_docx(markdown: str, out_path: str | Path, reference_docx: str | Path | None = None) -> Path:
-    """Write ``markdown`` to a .docx file, styled like ``reference_docx`` when given."""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    extra_args: list[str] = []
-    if reference_docx and Path(reference_docx).suffix.lower() == ".docx":
-        extra_args.append(f"--reference-doc={Path(reference_docx).resolve()}")
-    pypandoc.convert_text(markdown, "docx", format="gfm", outputfile=str(out_path), extra_args=extra_args)
-    return out_path
+    """Write ``markdown`` (resume dialect, see render.py) to a styled .docx file."""
+    return render_resume_docx(markdown, out_path, reference_docx=reference_docx)
 
 
 def docx_to_pdf(docx_path: str | Path, pdf_path: str | Path | None = None) -> Path:

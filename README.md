@@ -20,17 +20,18 @@ master resume (.docx) ──pandoc──► Markdown ─┐
 job posting (file / text / URL) ────────────┼─► Claude (Agent SDK, structured JSON output)
                                             │
                     tailored Markdown ◄─────┘
-                         ├──pandoc (your .docx as style reference)──► .docx
-                         └──LibreOffice / MS Word──────────────────► .pdf
+                         ├──resume renderer (python-docx)──► .docx
+                         └──LibreOffice / MS Word──────────► .pdf
                     + tailoring_report.md (match score, matched/missing skills, questions)
 ```
 
 - The agent's tools are locked down: it has **no file or shell access**. Its only possible
   tool is `WebFetch`, and only when you pass `--job-url`.
 - It doesn't load your personal `~/.claude` settings or `CLAUDE.md` files (`setting_sources=[]`).
-- The output Word file reuses the **styles** of your original resume (fonts, heading styles).
-  Formatting applied by hand (not through Word styles), tables and multi-column layouts are
-  not kept. The output uses a simple single-column layout, which ATS systems parse best.
+- The Word/PDF output uses a clean, classic single-column layout that ATS systems parse
+  well: centered name, ruled section headings, right-aligned dates, compact bullets.
+  Page margins are copied from your original resume. Your original's exact design
+  (custom fonts, tables, columns) is not copied.
 
 ## Requirements
 
@@ -115,7 +116,12 @@ Output (in `output/<date>_<company>_<job-title>/`):
 | `tailoring_report.md` | Match score, matched/missing requirements, changes, questions for you |
 
 **Always read the tailored resume before sending it.** Make sure every line is true and
-sounds like you.
+sounds like you. If you want to change something, edit the `.md` file and rebuild the
+Word/PDF files:
+
+```bash
+job-agent render output/<folder>/<Name>_Resume_<Company>.md --reference data/my_resume.docx
+```
 
 ## Development
 
@@ -133,7 +139,8 @@ src/job_apply_agent/
   cli.py        # `job-agent` command
   tailor.py     # Agent SDK call (options, prompt, structured output)
   prompts.py    # System prompt + JSON schema for the result
-  documents.py  # DOCX <-> Markdown (pandoc), DOCX -> PDF (LibreOffice / Word)
+  documents.py  # DOCX -> Markdown (pandoc), DOCX -> PDF (LibreOffice / Word)
+  render.py     # Markdown -> styled resume .docx
 examples/       # Fictional resume and job posting for trying it out
 tests/
 ```

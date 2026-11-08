@@ -8,18 +8,18 @@ Data analyst with 4 years of experience turning messy business data into dashboa
 
 ## Experience
 
-### Data Analyst — Northwind Retail
+### Data Analyst | Jan 2023 – Present
 
-*Toronto, ON | Jan 2023 – Present*
+*Northwind Retail | Toronto, ON*
 
 - Built and maintain 12 Tableau dashboards used weekly by the merchandising and finance teams.
 - Wrote SQL and Python (pandas) pipelines that pull sales data from PostgreSQL and cut monthly reporting time from 3 days to 4 hours.
 - Ran A/B test analysis for 6 pricing experiments and presented results to the VP of Pricing.
 - Mentored 2 junior analysts on SQL and data visualization best practices.
 
-### Junior Business Analyst — Blue Harbor Logistics
+### Junior Business Analyst | Jun 2021 – Dec 2022
 
-*Montreal, QC | Jun 2021 – Dec 2022*
+*Blue Harbor Logistics | Montreal, QC*
 
 - Cleaned and reconciled shipment data in Excel and SQL Server for weekly operations reports.
 - Automated a manual invoice-matching process with Python, saving about 10 hours per week.
@@ -27,13 +27,13 @@ Data analyst with 4 years of experience turning messy business data into dashboa
 
 ## Education
 
-### M.Sc. Business Analytics — University of Example
+### M.Sc. Business Analytics | 2021
 
-*2021*
+*University of Example*
 
-### B.Sc. Computer Engineering — Example Institute of Technology
+### B.Sc. Computer Engineering | 2019
 
-*2019*
+*Example Institute of Technology*
 
 ## Skills
 

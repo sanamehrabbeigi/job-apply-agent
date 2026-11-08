@@ -154,3 +154,10 @@ def test_cli_end_to_end_writes_md_docx_pdf(fake_query, tmp_path: Path, sample_re
 def test_cli_rejects_unknown_format(capsys):
     with pytest.raises(SystemExit):
         cli.main(["tailor", "--resume", "r.docx", "--job-text", "j", "--formats", "docx,rtf"])
+
+
+def test_cli_render_command(tmp_path: Path):
+    md = tmp_path / "Jane_Resume.md"
+    md.write_text("# Jane Doe\njane@example.com\n\n## Skills\n- SQL\n", encoding="utf-8")
+    assert cli.main(["render", str(md), "--formats", "docx"]) == 0
+    assert (tmp_path / "Jane_Resume.docx").exists()
