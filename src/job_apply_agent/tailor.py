@@ -22,12 +22,16 @@ from claude_agent_sdk import (
 )
 
 from .prompts import (
+    ANSWERS_SECTION,
     JOB_TEXT_SECTION,
     JOB_URL_SECTION,
+    PROFILE_SECTION,
     TAILOR_OUTPUT_SCHEMA,
     TAILOR_SYSTEM_PROMPT,
     TAILOR_USER_PROMPT,
 )
+
+DEFAULT_TARGET_SCORE = 85
 
 ProgressFn = Callable[[str], None]
 
@@ -104,6 +108,9 @@ def build_prompt(
     *,
     job_text: str | None = None,
     job_url: str | None = None,
+    profile: str | None = None,
+    answers: str | None = None,
+    target_score: int = DEFAULT_TARGET_SCORE,
     extra_instructions: str | None = None,
 ) -> str:
     if bool(job_text) == bool(job_url):
@@ -115,7 +122,12 @@ def build_prompt(
     )
     extra = f"Additional instructions from me:\n{extra_instructions.strip()}\n\n" if extra_instructions else ""
     return TAILOR_USER_PROMPT.format(
-        resume=resume_markdown.strip(), job_section=job_section, extra_instructions=extra
+        target_score=target_score,
+        resume=resume_markdown.strip(),
+        profile_section=PROFILE_SECTION.format(profile=profile.strip()) if profile and profile.strip() else "",
+        answers_section=ANSWERS_SECTION.format(answers=answers.strip()) if answers and answers.strip() else "",
+        job_section=job_section,
+        extra_instructions=extra,
     )
 
 
@@ -124,16 +136,29 @@ async def tailor_resume(
     *,
     job_text: str | None = None,
     job_url: str | None = None,
+    profile: str | None = None,
+    answers: str | None = None,
+    target_score: int = DEFAULT_TARGET_SCORE,
     extra_instructions: str | None = None,
     model: str | None = None,
     on_progress: ProgressFn | None = None,
 ) -> TailoredResume:
-    """Ask Claude to tailor ``resume_markdown`` to a job posting (given as text or URL)."""
+    """Ask Claude to tailor ``resume_markdown`` to a job posting (given as text or URL).
+
+    ``profile`` is extra career history the agent may draw on; ``answers`` are the
+    candidate's answers to earlier questions.
+    """
     if not resume_markdown.strip():
         raise ValueError("The resume is empty.")
 
     prompt = build_prompt(
-        resume_markdown, job_text=job_text, job_url=job_url, extra_instructions=extra_instructions
+        resume_markdown,
+        job_text=job_text,
+        job_url=job_url,
+        profile=profile,
+        answers=answers,
+        target_score=target_score,
+        extra_instructions=extra_instructions,
     )
     options = build_options(use_web_fetch=job_url is not None, model=model)
     progress = on_progress or (lambda _msg: None)

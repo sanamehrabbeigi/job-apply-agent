@@ -83,22 +83,67 @@ claude.ai. One run is a single, fairly short request.
 
 ## Usage
 
-Put your real resume in `data/`. The `data/` and `output/` folders and all `.docx`/`.pdf`
-files are git-ignored, so your personal information is never committed.
+### 1. Add your documents
+
+```
+data/
+  my_resume.docx          # your current resume (the starting point)
+  profile/                # your career profile: anything with more detail
+    work_history.docx     #   full job history, every project and achievement
+    skills.md             #   tools, certificates, courses...
+    answers.md            #   created by the agent: your answers to its questions
+  jobs/                   # job postings fetched from links (created automatically)
+```
+
+The agent can use **any fact** from `data/profile/` (Word, Markdown or text files), even
+if it's not in your resume, and picks what fits each job. The `data/` and `output/`
+folders and all `.docx`/`.pdf` files are git-ignored, so your personal information is
+never committed.
+
+### 2. Tailor to a job link
 
 ```bash
-# Job posting saved as a text file (most reliable)
-job-agent tailor --resume data/my_resume.docx --job-file data/jobs/acme_data_analyst.txt
-
-# Job posting URL (works for many company career pages; LinkedIn and some sites block bots)
-job-agent tailor --resume data/my_resume.docx --job-url https://example.com/careers/123
-
-# Options
-job-agent tailor --resume data/my_resume.docx --job-file job.txt \
-  --formats docx,pdf \
-  --instructions "Keep it to one page. Emphasize experimentation." \
-  --model opus
+job-agent tailor --resume data/my_resume.docx --job-url "https://www.linkedin.com/jobs/view/4470022823/"
 ```
+
+Any LinkedIn job link works, including links copied from search results
+(`...search-results/?currentJobId=...`). Company career pages (Greenhouse, Lever,
+Workday and most others) work too. The posting is saved in `data/jobs/`.
+
+### 3. Answer its questions to raise the match
+
+The agent aims for a **match score of 85** (change it with `--target-score`):
+
+1. It rewrites your resume in the job's language, using only true facts from your
+   resume, profile and earlier answers.
+2. If the score is below the target, it asks you short questions about the gaps
+   ("Have you used Looker? If yes, I'll add it to Skills"). Answer truthfully, or press
+   Enter to skip.
+3. It rewrites again with your answers, up to 3 rounds (`--max-rounds`).
+
+Your answers are saved in `data/profile/answers.md` and reused for every future job, so
+the agent learns your background over time. If a gap is real, the score stays below the
+target; the agent never invents experience to close it.
+
+### Other options
+
+```bash
+# Job posting from a text file, or pasted as text
+job-agent tailor --resume data/my_resume.docx --job-file data/jobs/acme_data_analyst.txt
+job-agent tailor --resume data/my_resume.docx --job-text "Data Analyst at ..."
+
+# Just save a posting from a link
+job-agent fetch-job "https://www.linkedin.com/jobs/view/4470022823/"
+
+# One rewrite without questions, two pages, a specific model
+job-agent tailor --resume data/my_resume.docx --job-url URL --no-questions \
+  --instructions "Two pages are fine." --model opus
+```
+
+> **LinkedIn note:** the agent reads LinkedIn's public (logged-out) job page, so your
+> LinkedIn account is never used. LinkedIn's User Agreement restricts automated access,
+> so keep it to personal, occasional use. If LinkedIn stops returning a posting, copy the
+> text into a file and use `--job-file`.
 
 Try it with the fictional example files:
 
@@ -111,7 +156,7 @@ Output (in `output/<date>_<company>_<job-title>/`):
 | File | What it is |
 | --- | --- |
 | `<Name>_Resume_<Company>.md` | Tailored resume (Markdown, easy to edit) |
-| `<Name>_Resume_<Company>.docx` | Word version, styled like your original |
+| `<Name>_Resume_<Company>.docx` | Word version |
 | `<Name>_Resume_<Company>.pdf` | PDF version |
 | `tailoring_report.md` | Match score, matched/missing requirements, changes, questions for you |
 
@@ -139,6 +184,8 @@ src/job_apply_agent/
   cli.py        # `job-agent` command
   tailor.py     # Agent SDK call (options, prompt, structured output)
   prompts.py    # System prompt + JSON schema for the result
+  jobs.py       # Fetch job postings from links (LinkedIn, JSON-LD job pages)
+  career_profile.py  # Load data/profile/ documents, save your answers
   documents.py  # DOCX -> Markdown (pandoc), DOCX -> PDF (LibreOffice / Word)
   render.py     # Markdown -> styled resume .docx
 examples/       # Fictional resume and job posting for trying it out
@@ -148,6 +195,7 @@ tests/
 ## Roadmap (ideas)
 
 - [x] Phase 1: tailor resume to a job posting (MD / DOCX / PDF)
+- [x] Job links (LinkedIn and career pages), career profile, ask-then-rewrite loop to a target match
 - [ ] Cover letter generation in your own voice
 - [ ] Job search and ranking from job boards (e.g. through an MCP server)
 - [ ] Application tracker (which jobs you applied to, with which resume version)

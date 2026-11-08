@@ -135,7 +135,10 @@ def test_cli_end_to_end_writes_md_docx_pdf(fake_query, tmp_path: Path, sample_re
     out = tmp_path / "output"
 
     code = cli.main(
-        ["tailor", "--resume", str(sample_resume_docx), "--job-file", str(job), "--out", str(out), "--quiet"]
+        [
+            "tailor", "--resume", str(sample_resume_docx), "--job-file", str(job), "--out", str(out),
+            "--profile-dir", str(tmp_path / "profile"), "--quiet",
+        ]
     )
 
     assert code == 0

@@ -1,4 +1,4 @@
-"""Command-line interface: ``job-agent tailor ...``."""
+"""Command-line interface: ``job-agent tailor ...``, ``job-agent fetch-job ...``, ``job-agent render ...``."""
 
 from __future__ import annotations
 
@@ -6,12 +6,15 @@ import argparse
 import asyncio
 import re
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
 from . import __version__
+from .career_profile import DEFAULT_PROFILE_DIR, load_answers, load_profile, save_answers
 from .documents import ConversionError, docx_to_pdf, read_resume, write_docx
-from .tailor import TailoredResume, TailoringError, auth_warning, tailor_resume
+from .jobs import JobFetchError, fetch_job
+from .tailor import DEFAULT_TARGET_SCORE, TailoredResume, TailoringError, auth_warning, tailor_resume
 
 FORMATS = ("md", "docx", "pdf")
 
@@ -43,9 +46,22 @@ def build_parser() -> argparse.ArgumentParser:
     t = sub.add_parser("tailor", help="Tailor your resume to a job posting.")
     t.add_argument("--resume", required=True, type=Path, help="Your master resume (.docx, .md or .txt).")
     job = t.add_mutually_exclusive_group(required=True)
-    job.add_argument("--job-file", type=Path, help="Text file with the job posting (most reliable).")
-    job.add_argument("--job-url", help="URL of the job posting (some sites, e.g. LinkedIn, block fetching).")
+    job.add_argument("--job-url", help="Link to the job posting (LinkedIn links of any kind work).")
+    job.add_argument("--job-file", type=Path, help="Text file with the job posting.")
     job.add_argument("--job-text", help="The job posting text itself.")
+    t.add_argument(
+        "--profile-dir",
+        type=Path,
+        default=DEFAULT_PROFILE_DIR,
+        help=f"Folder with your career profile documents and saved answers (default: {DEFAULT_PROFILE_DIR}).",
+    )
+    t.add_argument("--profile", type=Path, action="append", default=[], help="Extra profile document (repeatable).")
+    t.add_argument(
+        "--target-score", type=int, default=DEFAULT_TARGET_SCORE, help="Match score to aim for (default: 85)."
+    )
+    t.add_argument("--max-rounds", type=int, default=3, help="Max rewrite rounds with your answers (default: 3).")
+    t.add_argument("--no-questions", action="store_true", help="Don't ask questions; do a single rewrite.")
+    t.add_argument("--jobs-dir", type=Path, default=Path("data/jobs"), help="Where fetched postings are saved.")
     t.add_argument("--out", type=Path, default=Path("output"), help="Output folder (default: ./output).")
     t.add_argument(
         "--formats",
@@ -56,6 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--model", help="Claude model alias or ID (default: your account's default).")
     t.add_argument("--instructions", help="Extra instructions, e.g. 'Keep it to one page.'")
     t.add_argument("--quiet", action="store_true", help="Don't print agent progress.")
+
+    f = sub.add_parser("fetch-job", help="Save a job posting from a link as a text file.")
+    f.add_argument("url", help="Job posting link (LinkedIn links of any kind work).")
+    f.add_argument("--jobs-dir", type=Path, default=Path("data/jobs"), help="Folder to save into (default: data/jobs).")
 
     r = sub.add_parser("render", help="Re-create the .docx/.pdf from a (hand-edited) resume .md file.")
     r.add_argument("markdown", type=Path, help="Resume Markdown file, e.g. output/.../Name_Resume_Company.md")
@@ -112,31 +132,92 @@ def save_outputs(
     return folder, saved
 
 
-async def run_tailor(args: argparse.Namespace) -> int:
+def run_fetch_job(args: argparse.Namespace) -> int:
+    posting = fetch_job(args.url)
+    path = posting.save(args.jobs_dir)
+    print(f"Saved {posting.title or 'job posting'}{' at ' + posting.company if posting.company else ''} to {path}")
+    return 0
+
+
+def resolve_job(args: argparse.Namespace) -> tuple[str | None, str | None]:
+    """Return (job_text, job_url_for_agent). Links are fetched here; the agent's WebFetch is the fallback."""
+    if args.job_text:
+        return args.job_text, None
+    if args.job_file:
+        return args.job_file.read_text(encoding="utf-8"), None
+    try:
+        posting = fetch_job(args.job_url)
+    except JobFetchError as exc:
+        print(f"! {exc}\n  Letting the agent try to read the page instead.", file=sys.stderr)
+        return None, args.job_url
+    path = posting.save(args.jobs_dir)
+    print(f"Job: {posting.title}{' at ' + posting.company if posting.company else ''} (saved to {path})")
+    return posting.to_text(), None
+
+
+def ask_questions(questions: list[str], ask: Callable[[str], str] = input) -> list[tuple[str, str]]:
+    """Ask each question in the terminal; empty answers are skipped."""
+    print("\nAnswer truthfully to raise the match. Press Enter to skip a question.")
+    answered = []
+    for i, question in enumerate(questions, 1):
+        print(f"\n{i}. {question}")
+        answer = ask("   > ").strip()
+        if answer:
+            answered.append((question, answer))
+    return answered
+
+
+async def run_tailor(args: argparse.Namespace, ask: Callable[[str], str] = input) -> int:
     warning = auth_warning()
     if warning:
         print(f"! {warning}", file=sys.stderr)
 
     resume_md = read_resume(args.resume)
-    job_text = args.job_text or (args.job_file.read_text(encoding="utf-8") if args.job_file else None)
+    profile = load_profile(args.profile_dir, args.profile)
+    if profile:
+        print(f"Using career profile from {args.profile_dir}" + (f" and {len(args.profile)} extra file(s)" if args.profile else ""))
+    job_text, job_url = resolve_job(args)
+    interactive = not args.no_questions and (ask is not input or sys.stdin.isatty())
+    progress = None if args.quiet else (lambda msg: print(f"  · {msg}"))
 
-    print(f"Tailoring {args.resume.name} ... (this usually takes a minute or two)")
-    tailored = await tailor_resume(
-        resume_md,
-        job_text=job_text,
-        job_url=args.job_url,
-        extra_instructions=args.instructions,
-        model=args.model,
-        on_progress=None if args.quiet else (lambda msg: print(f"  · {msg}")),
-    )
+    tailored: TailoredResume | None = None
+    for round_no in range(1, max(1, args.max_rounds) + 1):
+        print(f"\nRound {round_no}: tailoring {args.resume.name} ... (usually a minute or two)")
+        tailored = await tailor_resume(
+            resume_md,
+            job_text=job_text,
+            job_url=job_url,
+            profile=profile,
+            answers=load_answers(args.profile_dir),
+            target_score=args.target_score,
+            extra_instructions=args.instructions,
+            model=args.model,
+            on_progress=progress,
+        )
+        print(f"Estimated match: {tailored.match_score}/100 (target {args.target_score})")
+        if (
+            tailored.match_score >= args.target_score
+            or not tailored.questions_for_candidate
+            or not interactive
+            or round_no == args.max_rounds
+        ):
+            break
+        answered = ask_questions(tailored.questions_for_candidate, ask)
+        if not answered:
+            break
+        path = save_answers(args.profile_dir, f"{tailored.job_title} at {tailored.company}", answered)
+        print(f"Saved your answers to {path} (reused for future jobs).")
 
+    assert tailored is not None
     reference = args.resume if args.resume.suffix.lower() == ".docx" else None
     folder, saved = save_outputs(tailored, args.out, args.formats, reference)
 
     print(f"\nDone: {tailored.job_title}{' at ' + tailored.company if tailored.company else ''}")
     print(f"Estimated match: {tailored.match_score}/100")
+    if tailored.match_score < args.target_score:
+        print("Below target. See the report's questions; answering them truthfully is the way to raise it.")
     if tailored.missing_keywords:
-        print("Not shown in your resume (not added): " + ", ".join(tailored.missing_keywords))
+        print("Not shown in your resume or profile (not added): " + ", ".join(tailored.missing_keywords))
     print(f"\nSaved to {folder}/")
     for path in saved:
         print(f"  - {path.name}")
@@ -151,7 +232,9 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(run_tailor(args))
         if args.command == "render":
             return run_render(args)
-    except (FileNotFoundError, ConversionError, TailoringError, ValueError) as exc:
+        if args.command == "fetch-job":
+            return run_fetch_job(args)
+    except (FileNotFoundError, ConversionError, TailoringError, JobFetchError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
