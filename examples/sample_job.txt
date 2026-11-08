@@ -1,0 +1,21 @@
+Senior Data Analyst — Pricing & Revenue
+Company: Maple Commerce (fictional example)
+Location: Toronto, ON (Hybrid)
+
+About the role
+Maple Commerce is looking for a Senior Data Analyst to join our Pricing & Revenue team. You will own the analytics behind pricing decisions, design and analyze experiments, and build self-serve dashboards for business partners.
+
+Responsibilities
+- Design, run, and analyze A/B tests for pricing and promotions.
+- Build and maintain dashboards in Tableau or Looker for pricing, revenue, and margin KPIs.
+- Write production-quality SQL and Python to build reliable data pipelines.
+- Partner with pricing managers and finance to turn analysis into recommendations.
+- Mentor junior analysts and raise the bar on analytics best practices.
+
+Requirements
+- 4+ years of experience in data analytics, ideally in retail or e-commerce.
+- Advanced SQL and Python (pandas).
+- Experience with experimentation and statistical methods (A/B testing, regression).
+- Experience with price elasticity or revenue management is a strong plus.
+- Experience with dbt and Snowflake is a plus.
+- Excellent communication skills with non-technical stakeholders.
