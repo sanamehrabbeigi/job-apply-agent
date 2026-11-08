@@ -192,13 +192,11 @@ examples/       # Fictional resume and job posting for trying it out
 tests/
 ```
 
-## Roadmap (ideas)
+## Roadmap
 
-- [x] Phase 1: tailor resume to a job posting (MD / DOCX / PDF)
-- [x] Job links (LinkedIn and career pages), career profile, ask-then-rewrite loop to a target match
-- [ ] Cover letter generation in your own voice
-- [ ] Job search and ranking from job boards (e.g. through an MCP server)
-- [ ] Application tracker (which jobs you applied to, with which resume version)
-- [ ] Answers to common application questions, saved and reused
-- [ ] Human-in-the-loop form filling. You always review and click "Submit" yourself, since
-      many job sites forbid automated submissions.
+See **[ROADMAP.md](ROADMAP.md)** for what's next:
+
+- **Phase 2: find and rank the best jobs.** Search LinkedIn, Indeed, company career pages
+  and more, filter by my preferences, and show a ranked shortlist with reasons.
+- **Phase 3: help me apply.** Application kit (resume, cover letter, answers to
+  application questions), then assisted form filling where I review and click "Submit".
