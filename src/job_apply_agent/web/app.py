@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -106,10 +106,12 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         min_score: int | None = None,
         include_closed: bool = False,
         hide_done: bool = False,
+        q: str | None = None,
+        posted_within_days: int | None = Query(None, ge=1, le=365),
     ) -> dict[str, Any]:
         jobs = rt.db.list_jobs(now=now(), tab=tab, sort=sort, order=order, role=role, location=location,
                                source=source, status=status, min_score=min_score, include_closed=include_closed,
-                               hide_done=hide_done)
+                               hide_done=hide_done, q=q, posted_within_days=posted_within_days)
         return {"jobs": jobs, "counts": rt.db.counts(now())}
 
     def tailored_files(folder: str | None) -> list[str]:
@@ -248,6 +250,11 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         if prefs.get("resume_path"):  # a custom path would hide the upload; go back to the default location
             prefs["resume_path"] = ""
             save_preferences(prefs)
+        if not rt.runner.running:
+            # Score the jobs that have no score yet right away. Jobs scored against an older resume are
+            # re-scored only when she confirms (the "Re-score" banner).
+            keep(asyncio.create_task(rt.runner.run(trigger="resume", sources=[])))
+            await asyncio.sleep(0)
         return profile_info()
 
     @app.post("/api/profile/documents")

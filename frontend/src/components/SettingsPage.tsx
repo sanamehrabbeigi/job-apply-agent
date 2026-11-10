@@ -94,7 +94,7 @@ export function SettingsPage({ onSaved }: { onSaved: () => void }) {
           <input type="file" accept=".docx,.pdf,.md,.txt" onChange={onFile(async (file) => {
             setProfile(await api.uploadResume(file));
             setPrefs(await api.preferences());
-            return "Resume saved. Jobs will be re-scored on the next search.";
+            return "Resume saved. Jobs without a score are being scored now (see the progress at the top).";
           })} />
         </label>
         <h3>Profile documents</h3>
