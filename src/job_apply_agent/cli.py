@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__, paths
 from .documents import ConversionError, docx_to_pdf, write_docx
+from .envfile import export_claude_token
 from .jobs import JobFetchError, fetch_job
 from .outputs import candidate_name, save_outputs, slugify  # noqa: F401  (re-exported for compatibility)
 from .preferences import load_preferences, resume_path
@@ -230,6 +231,7 @@ def run_serve(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    export_claude_token()
     try:
         if args.command == "tailor":
             return asyncio.run(run_tailor(args))

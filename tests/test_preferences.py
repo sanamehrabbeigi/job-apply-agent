@@ -86,3 +86,16 @@ def test_resume_path_finds_uploaded_markdown_resume(monkeypatch, tmp_path: Path)
     monkeypatch.setenv("JOB_AGENT_DATA_DIR", str(tmp_path))
     (tmp_path / "my_resume.md").write_text("# Me", encoding="utf-8")
     assert resume_path(merge_defaults({})) == tmp_path / "my_resume.md"
+
+
+def test_claude_token_from_env_file_is_exported(monkeypatch, tmp_path: Path):
+    env = tmp_path / ".env"
+    env.write_text("CLAUDE_CODE_OAUTH_TOKEN=tok-123\n", encoding="utf-8")
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    assert envfile.export_claude_token(env) is True
+    import os
+
+    assert os.environ["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-123"
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "already-set")
+    assert envfile.export_claude_token(env) is False  # a real environment variable wins
+    assert os.environ["CLAUDE_CODE_OAUTH_TOKEN"] == "already-set"

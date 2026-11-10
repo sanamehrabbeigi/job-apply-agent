@@ -32,3 +32,16 @@ def load_env(path: Path | None = None) -> dict[str, str]:
         if os.environ.get(key):
             values[key] = os.environ[key]
     return values
+
+
+def export_claude_token(path: Path | None = None) -> bool:
+    """Make a ``CLAUDE_CODE_OAUTH_TOKEN`` from data/.env visible to the Agent SDK (it reads the environment).
+
+    A token already set in the real environment wins. Returns True when the file's token was used."""
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return False
+    token = read_env_file(path or paths.env_path()).get("CLAUDE_CODE_OAUTH_TOKEN")
+    if not token:
+        return False
+    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = token
+    return True

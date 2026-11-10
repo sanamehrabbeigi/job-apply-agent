@@ -117,6 +117,7 @@ Create `data/.env` (git-ignored):
 JSEARCH_API_KEY=...      # https://rapidapi.com -> JSearch, Basic (free) plan
 ADZUNA_APP_ID=...        # https://developer.adzuna.com -> free key
 ADZUNA_APP_KEY=...
+CLAUDE_CODE_OAUTH_TOKEN=...   # optional: from `claude setup-token`, if the claude login expires
 ```
 
 Without keys those two sources are skipped and everything else works. The app counts calls and
