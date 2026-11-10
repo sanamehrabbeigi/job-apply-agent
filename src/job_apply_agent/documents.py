@@ -26,7 +26,7 @@ class ConversionError(RuntimeError):
 def read_resume(path: str | Path) -> str:
     """Return the resume at ``path`` as Markdown text.
 
-    Supports .docx (converted with pandoc) and .md/.txt (read as-is).
+    Supports .docx (converted with pandoc), .pdf (text extracted with pypdf) and .md/.txt (read as-is).
     """
     path = Path(path)
     if not path.is_file():
@@ -38,7 +38,26 @@ def read_resume(path: str | Path) -> str:
     if suffix == ".docx":
         # gfm keeps headings, bullet lists and bold text; --wrap=none keeps one bullet per line.
         return pypandoc.convert_file(str(path), "gfm", extra_args=["--wrap=none"]).strip()
-    raise ConversionError(f"Unsupported resume format '{suffix}'. Use .docx, .md or .txt.")
+    if suffix == ".pdf":
+        return _read_pdf(path)
+    raise ConversionError(f"Unsupported resume format '{suffix}'. Use .docx, .pdf, .md or .txt.")
+
+
+def _read_pdf(path: Path) -> str:
+    """Plain text of a PDF, one page after another. Scanned (image-only) PDFs are rejected."""
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
+    try:
+        pages = [page.extract_text() or "" for page in PdfReader(str(path)).pages]
+    except (PdfReadError, ValueError, OSError) as exc:
+        raise ConversionError(f"Couldn't read the PDF {path.name}: {exc}") from exc
+    text = "\n\n".join(page.strip() for page in pages if page.strip())
+    if len(text) < 20:
+        raise ConversionError(
+            f"{path.name} has no selectable text (it may be a scanned image). Upload the Word version instead."
+        )
+    return text
 
 
 def write_docx(markdown: str, out_path: str | Path, reference_docx: str | Path | None = None) -> Path:

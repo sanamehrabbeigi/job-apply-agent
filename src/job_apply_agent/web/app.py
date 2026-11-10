@@ -29,8 +29,8 @@ from ..tailor_sessions import MissingResume, NotWaiting
 from ..timeutil import iso
 
 STATIC_DIR = Path(__file__).with_name("static")
-RESUME_SUFFIXES = {".docx", ".md", ".txt"}
-PROFILE_SUFFIXES = {".docx", ".md", ".markdown", ".txt"}
+RESUME_SUFFIXES = {".docx", ".pdf", ".md", ".txt"}
+PROFILE_SUFFIXES = {".docx", ".pdf", ".md", ".markdown", ".txt"}
 Status = Literal["new", "saved", "applied", "interview", "offer", "rejected"]
 
 
@@ -238,7 +238,7 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
     async def upload_resume(file: UploadFile) -> dict[str, Any]:
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in RESUME_SUFFIXES:
-            raise HTTPException(422, "Upload your resume as .docx, .md or .txt.")
+            raise HTTPException(422, "Upload your resume as .docx, .pdf, .md or .txt.")
         target = paths.data_dir() / f"my_resume{suffix}"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(await file.read())
@@ -254,7 +254,7 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
     async def upload_document(file: UploadFile) -> dict[str, Any]:
         name = Path(file.filename or "").name
         if Path(name).suffix.lower() not in PROFILE_SUFFIXES:
-            raise HTTPException(422, "Profile documents must be .docx, .md or .txt.")
+            raise HTTPException(422, "Profile documents must be .docx, .pdf, .md or .txt.")
         if name.lower() == "answers.md":
             raise HTTPException(422, "answers.md is managed by the app; pick another file name.")
         folder = paths.profile_dir()

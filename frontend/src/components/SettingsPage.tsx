@@ -90,8 +90,8 @@ export function SettingsPage({ onSaved }: { onSaved: () => void }) {
           Master resume: {profile.resume.exists ? <strong>{profile.resume.name}</strong> : <em>not added yet</em>}
         </p>
         <label className="field">
-          Upload resume (.docx, .md or .txt)
-          <input type="file" accept=".docx,.md,.txt" onChange={onFile(async (file) => {
+          Upload resume (.docx, .pdf, .md or .txt)
+          <input type="file" accept=".docx,.pdf,.md,.txt" onChange={onFile(async (file) => {
             setProfile(await api.uploadResume(file));
             setPrefs(await api.preferences());
             return "Resume saved. Jobs will be re-scored on the next search.";
@@ -114,7 +114,7 @@ export function SettingsPage({ onSaved }: { onSaved: () => void }) {
         </ul>
         <label className="field">
           Add a document
-          <input type="file" accept=".docx,.md,.markdown,.txt" onChange={onFile(async (file) => {
+          <input type="file" accept=".docx,.pdf,.md,.markdown,.txt" onChange={onFile(async (file) => {
             setProfile(await api.uploadDocument(file));
             return `Added ${file.name}. Jobs will be re-scored on the next search.`;
           })} />

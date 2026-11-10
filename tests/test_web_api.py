@@ -108,7 +108,7 @@ def test_profile_uploads(client, tmp_path: Path):
     r = client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane Doe\nSQL", "text/markdown")})
     assert r.status_code == 200 and r.json()["resume"]["exists"] is True
     assert r.json()["resume"]["name"] == "my_resume.md"
-    assert client.post("/api/profile/resume", files={"file": ("cv.pdf", b"%PDF", "application/pdf")}).status_code == 422
+    assert client.post("/api/profile/resume", files={"file": ("cv.rtf", b"{\\rtf1}", "application/rtf")}).status_code == 422
     doc = client.post("/api/profile/documents", files={"file": ("../skills.md", b"Looker", "text/markdown")})
     assert [d["name"] for d in doc.json()["documents"]] == ["skills.md"]  # path stripped
     assert client.post("/api/profile/documents", files={"file": ("answers.md", b"x", "text/markdown")}).status_code == 422
@@ -166,3 +166,15 @@ def test_status_reports_outdated_scores_and_rescore_is_accepted(client):
                      profile_hash=profile_hash("old resume", ""), now="2026-11-09T00:00:00+00:00")
     assert client.get("/api/status").json()["outdated_scores"] == 1
     assert client.post("/api/search", json={"sources": [], "rescore": True}).status_code == 202
+
+
+def test_pdf_resume_and_profile_document_uploads(client, tmp_path: Path):
+    from pdf_helpers import write_text_pdf
+
+    pdf = write_text_pdf(tmp_path / "cv.pdf", ["Jane Doe", "Data Analyst"]).read_bytes()
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane", "text/markdown")})
+    r = client.post("/api/profile/resume", files={"file": ("cv.pdf", pdf, "application/pdf")})
+    assert r.status_code == 200 and r.json()["resume"]["name"] == "my_resume.pdf"
+    assert client.get("/api/status").json()["resume"] is True
+    doc = client.post("/api/profile/documents", files={"file": ("history.pdf", pdf, "application/pdf")})
+    assert [d["name"] for d in doc.json()["documents"]] == ["history.pdf"]

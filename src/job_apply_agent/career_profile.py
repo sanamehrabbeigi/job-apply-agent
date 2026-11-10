@@ -1,6 +1,6 @@
 """Your career profile: everything the agent may draw on besides your resume.
 
-Put any number of documents in ``data/profile/`` (Word, Markdown or text): a full work
+Put any number of documents in ``data/profile/`` (Word, PDF, Markdown or text): a full work
 history, old resumes, project lists, performance reviews, certificates... The agent may
 use any fact from them, choosing what fits each job.
 
@@ -18,7 +18,7 @@ from .documents import read_resume
 
 DEFAULT_PROFILE_DIR = Path("data/profile")
 ANSWERS_FILE = "answers.md"
-SUPPORTED = {".docx", ".md", ".markdown", ".txt"}
+SUPPORTED = {".docx", ".pdf", ".md", ".markdown", ".txt"}
 
 
 def load_profile(profile_dir: Path | None = DEFAULT_PROFILE_DIR, extra_files: list[Path] | None = None) -> str:

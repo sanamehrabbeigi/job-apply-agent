@@ -157,7 +157,7 @@ def resume_path(prefs: dict[str, Any]) -> Path:
     custom = (prefs.get("resume_path") or "").strip()
     if custom:
         return Path(custom)
-    for suffix in (".docx", ".md", ".txt"):
+    for suffix in (".docx", ".pdf", ".md", ".txt"):
         candidate = paths.data_dir() / f"my_resume{suffix}"
         if candidate.is_file():
             return candidate

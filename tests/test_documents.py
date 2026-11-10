@@ -57,3 +57,23 @@ def test_docx_to_pdf(tmp_path: Path, sample_resume_md: str):
     pdf = docx_to_pdf(docx)
     assert pdf.exists()
     assert pdf.read_bytes().startswith(b"%PDF")
+
+
+def test_read_resume_from_text_pdf(tmp_path):
+    from pdf_helpers import write_text_pdf
+
+    from job_apply_agent.documents import read_resume
+
+    pdf = write_text_pdf(tmp_path / "cv.pdf", ["Alex Rivera", "Data Analyst (Northwind Retail)", "SQL, Python, Tableau"])
+    text = read_resume(pdf)
+    assert "Alex Rivera" in text and "Data Analyst (Northwind Retail)" in text and "Tableau" in text
+
+
+def test_read_resume_rejects_scanned_pdf(tmp_path):
+    import pytest
+    from pdf_helpers import write_blank_pdf
+
+    from job_apply_agent.documents import ConversionError, read_resume
+
+    with pytest.raises(ConversionError, match="no selectable text"):
+        read_resume(write_blank_pdf(tmp_path / "scan.pdf"))
