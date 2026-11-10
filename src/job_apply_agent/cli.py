@@ -70,6 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("markdown", type=Path, help="Resume Markdown file, e.g. output/.../Name_Resume_Company.md")
     r.add_argument("--formats", type=parse_formats, default=["docx", "pdf"], help="docx,pdf (default: both)")
     r.add_argument("--reference", type=Path, help="Your original .docx resume (page margins are copied).")
+    se = sub.add_parser("search", help="Search all job sources once and score new jobs (no web UI needed).")
+    se.add_argument(
+        "--sources",
+        type=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+        help="Comma-separated sources, e.g. greenhouse,lever (default: all enabled).",
+    )
+    se.add_argument("--no-score", action="store_true", help="Collect jobs without Claude scoring.")
     return parser
 
 
@@ -171,6 +178,35 @@ async def run_tailor(args: argparse.Namespace, ask: Callable[[str], str] = input
     print("\nReview the resume before sending it: check every line is true and reads like you.")
     return 0
 
+def format_stat(name: str, stat: dict) -> str:
+    status = stat.get("status")
+    if status == "skipped" and name != "scoring":
+        return f"{name}: skipped ({stat.get('reason')})"
+    if status == "error":
+        return f"{name}: error: {stat.get('error')}"
+    if name == "scoring":
+        return f"scoring: {stat.get('message', '')}"
+    line = f"{name}: {stat.get('fetched', 0)} fetched, {stat.get('relevant', 0)} relevant, {stat.get('new', 0)} new"
+    if stat.get("warnings"):
+        line += f" ({len(stat['warnings'])} warning(s), first: {stat['warnings'][0]})"
+    return line
+
+
+def run_search(args: argparse.Namespace) -> int:
+    from . import runtime
+
+    rt = runtime.build_runtime()
+    run_id = asyncio.run(rt.runner.run(trigger="cli", sources=args.sources, score=not args.no_score))
+    run = rt.db.get_run(run_id)
+    for name, stat in run["sources"].items():
+        print(format_stat(name, stat))
+    if run["error"]:
+        print(f"Error: {run['error']}", file=sys.stderr)
+        return 1
+    print("Open the app to see the ranked list: job-agent serve")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -180,6 +216,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_render(args)
         if args.command == "fetch-job":
             return run_fetch_job(args)
+        if args.command == "search":
+            return run_search(args)
     except (FileNotFoundError, ConversionError, TailoringError, JobFetchError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
