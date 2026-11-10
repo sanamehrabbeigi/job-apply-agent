@@ -138,3 +138,27 @@ def test_runs_quota_and_source_state(db):
     db.mark_source_attempt("lever", T, success=True)
     assert db.source_states()["lever"]["last_success_at"] == T
     assert db.has_link("greenhouse", "1") is False
+
+
+def test_relevant_posting_merged_into_irrelevant_job_takes_its_location(db):
+    job_id, _ = add(db, posting(location="Remote - US"), relevant=False)
+    add(db, posting(source="lever", external_id="l9", url="https://jobs.lever.co/acme/l9", location="Remote - Canada"))
+    job = db.get_job(job_id)
+    assert job["relevant"] is True and job["location"] == "Remote - Canada"
+
+
+def test_known_complete_only_when_full_description(db):
+    add(db, posting(source="linkedin", external_id="li1", description="", description_is_partial=True))
+    assert db.has_link("linkedin", "li1") is True
+    assert db.is_known_complete("linkedin", "li1") is False
+    add(db, posting())  # greenhouse link with a full description
+    assert db.is_known_complete("greenhouse", "1") is True
+
+
+def test_full_description_arriving_later_clears_score(db):
+    job_id, _ = add(db, posting(source="linkedin", external_id="li1", description="", description_is_partial=True))
+    db.save_score(job_id, score=40, summary="title only", reasons=[], gaps=[], seniority_fit="fit", model="m",
+                  profile_hash="h", now=T)
+    add(db, posting(source="linkedin", external_id="li1", description="Full text " * 50))
+    assert db.get_job(job_id)["score"] is None
+    assert [j["id"] for j in db.jobs_to_score("h")] == [job_id]

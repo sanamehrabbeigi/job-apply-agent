@@ -69,7 +69,7 @@ def test_normalizers():
     assert normalize_company("TD Bank, Ltd") == "td bank"
     assert normalize_title("Sr. Data Analyst (Remote)") == "senior data analyst"
     assert normalize_title("Data Analyst - Toronto") == "data analyst"
-    assert canonical_url("https://Boards.Greenhouse.io/faire/jobs/88?gh_jid=88#x") == "boards.greenhouse.io/faire/jobs/88"
+    assert canonical_url("https://Boards.Greenhouse.io/faire/jobs/88?gh_jid=88#x") == "boards.greenhouse.io/faire/jobs/88?gh_jid=88"
     assert canonical_url("not a url") == ""
 
 
@@ -82,3 +82,16 @@ def test_dedupe_key_merges_variants():
     assert dedupe_key(a) != dedupe_key(c)  # seniority kept
     assert dedupe_key(a) != dedupe_key(d)  # city kept
     assert dedupe_key(d).endswith("|montreal")
+
+
+def test_canonical_url_keeps_job_id_query_and_drops_tracking():
+    a = canonical_url("https://stripe.com/jobs/search?gh_jid=111&utm_source=x")
+    b = canonical_url("https://stripe.com/jobs/search?gh_jid=222")
+    assert a == "stripe.com/jobs/search?gh_jid=111" and a != b
+    assert canonical_url("https://jobs.lever.co/acme/a1?lever-source=LinkedIn") == "jobs.lever.co/acme/a1"
+
+
+def test_remote_jobs_in_different_countries_do_not_merge():
+    us = job(title="Data Engineer", location="Remote - US", remote=True)
+    ca = job(title="Data Engineer", location="Remote - Canada", remote=True)
+    assert dedupe_key(us) != dedupe_key(ca)

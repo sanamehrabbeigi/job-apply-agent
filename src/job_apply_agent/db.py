@@ -212,6 +212,14 @@ class Database:
         return self._one("SELECT 1 FROM job_links WHERE source = ? AND external_id = ?",
                          (source, external_id)) is not None
 
+    def is_known_complete(self, source: str, external_id: str) -> bool:
+        """Stored with a full description, so a source can skip re-fetching the job's details."""
+        return self._one(
+            "SELECT 1 FROM job_links l JOIN jobs j ON j.id = l.job_id "
+            "WHERE l.source = ? AND l.external_id = ? AND j.description_is_partial = 0",
+            (source, external_id),
+        ) is not None
+
     def upsert_posting(
         self,
         p: JobPosting,
@@ -283,11 +291,14 @@ class Database:
         if replace:
             fields["description"] = p.description
             fields["description_is_partial"] = int(not new_full)
+            if old["description_is_partial"] and new_full:
+                fields["score"] = None  # it was scored on a snippet; score again with the full posting
         if not old["posted_at"] and p.posted_at:
             fields["posted_at"] = p.posted_at
         if relevant and not old["relevant"]:
             fields["relevant"] = 1
             fields["location_label"] = label
+            fields["location"] = p.location  # show where the relevant copy of the job is
         assignments = ", ".join(f"{key} = ?" for key in fields)
         self._conn.execute(f"UPDATE jobs SET {assignments} WHERE id = ?", (*fields.values(), job_id))
 

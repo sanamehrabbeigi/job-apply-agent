@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from ..jobs import JobPosting
 
@@ -17,6 +17,7 @@ _LEGAL = re.compile(r"\b(?:inc|incorporated|ltd|limited|llc|llp|lp|corp|corporat
 _BRACKETS = re.compile(r"\([^)]*\)|\[[^\]]*\]")
 _TRAILING_PLACE = re.compile(r"\s+[-–—|,]\s*(?:remote|hybrid|on[- ]?site|in[- ]office|toronto|ottawa|canada|gta)\b.*$")
 _ABBREVIATIONS = {"sr": "senior", "jr": "junior", "mgr": "manager", "eng": "engineer"}
+_TRACKING_PARAMS = {"src", "source", "ref", "referrer", "gh_src", "lever-source", "lever-origin", "trk", "refid"}
 
 
 def fold(text: str) -> str:
@@ -43,7 +44,9 @@ def primary_city(location: str, remote: bool | None) -> str:
         if f" {city} " in padded:
             return city
     if remote or " remote " in padded:
-        return "remote"
+        from .filters import CANADA  # local import: filters imports this module
+
+        return "remote canada" if CANADA.search(fold(location or "")) else "remote"
     return " ".join(_words((location or "").split(",")[0]))
 
 
@@ -55,4 +58,8 @@ def canonical_url(url: str) -> str:
     parts = urlsplit(url or "")
     if not parts.netloc:
         return ""
-    return f"{parts.netloc.lower()}{parts.path.rstrip('/')}"
+    # Keep the query (many career sites identify the job only by ?gh_jid=... or ?id=...), minus tracking params.
+    query = sorted((k, v) for k, v in parse_qsl(parts.query)
+                   if k.lower() not in _TRACKING_PARAMS and not k.lower().startswith("utm_"))
+    suffix = f"?{urlencode(query)}" if query else ""
+    return f"{parts.netloc.lower()}{parts.path.rstrip('/')}{suffix}"

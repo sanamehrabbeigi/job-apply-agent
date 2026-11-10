@@ -117,7 +117,7 @@ class SearchRunner:
             quota=QuotaGuard(self.db, budgets_from_prefs(prefs), self.now_fn),
             env=self.load_env(),
             role_ok=lambda title: role_matches(title, prefs["role_terms"]),
-            known=self.db.has_link,
+            known=self.db.is_known_complete,
             last_success=lambda name: parse_datetime((states.get(name) or {}).get("last_success_at")),
             progress=lambda message: self.events.publish({"type": "run.progress", "run_id": run_id, "message": message}),
         )

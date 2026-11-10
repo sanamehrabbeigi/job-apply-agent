@@ -206,3 +206,18 @@ def test_event_bus_drops_when_full():
     bus.unsubscribe(queue)
     bus.publish({"type": "c"})
     assert queue.qsize() == 1
+
+
+async def test_sources_see_jobs_without_full_description_as_unknown(db):
+    seen = []
+
+    async def li(ctx):
+        seen.append(ctx.known("linkedin", "9"))
+        return SourceResult(postings=[JobPosting(url="https://li/9", title="Data Analyst", company="Acme",
+                                                 location="Toronto, ON", external_id="9", source="linkedin",
+                                                 description_is_partial=True)])
+
+    runner = make_runner(db, {"linkedin": li})
+    await runner.run(trigger="manual")
+    await runner.run(trigger="manual")
+    assert seen == [False, False]
