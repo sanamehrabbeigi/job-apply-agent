@@ -1,0 +1,45 @@
+# Canadian employers whose public job boards the app reads. Edit in Settings.
+# ats: greenhouse | lever | ashby -> board is the company's board name in the URL.
+# ats: workday -> host, tenant and site from the careers URL https://<host>/<site>.
+- {name: Wealthsimple, ats: ashby, board: wealthsimple}
+- {name: KOHO, ats: ashby, board: koho}
+- {name: Benevity, ats: ashby, board: benevity}
+- {name: Lightspeed, ats: ashby, board: lightspeedhq}
+- {name: Cohere, ats: ashby, board: cohere}
+- {name: 1Password, ats: ashby, board: 1password}
+- {name: Float, ats: ashby, board: float}
+- {name: Hopper, ats: ashby, board: hopper}
+- {name: Loopio, ats: ashby, board: loopio}
+- {name: Jobber, ats: ashby, board: jobber}
+- {name: Neo Financial, ats: ashby, board: neofinancial}
+- {name: Trulioo, ats: ashby, board: trulioo}
+- {name: Clearco, ats: ashby, board: clearco}
+- {name: Miovision, ats: ashby, board: miovision}
+- {name: Snowflake, ats: ashby, board: snowflake}
+- {name: Faire, ats: greenhouse, board: faire}
+- {name: Hootsuite, ats: greenhouse, board: hootsuite}
+- {name: D2L, ats: greenhouse, board: d2l}
+- {name: Geotab, ats: greenhouse, board: geotab}
+- {name: Instacart, ats: greenhouse, board: instacart}
+- {name: Coinbase, ats: greenhouse, board: coinbase}
+- {name: Databricks, ats: greenhouse, board: databricks}
+- {name: Fivetran, ats: greenhouse, board: fivetran}
+- {name: Stripe, ats: greenhouse, board: stripe}
+- {name: Airbnb, ats: greenhouse, board: airbnb}
+- {name: Affirm, ats: greenhouse, board: affirm}
+- {name: Pinterest, ats: greenhouse, board: pinterest}
+- {name: Robinhood, ats: greenhouse, board: robinhood}
+- {name: Samsara, ats: greenhouse, board: samsara}
+- {name: Lyft, ats: greenhouse, board: lyft}
+- {name: Wattpad, ats: lever, board: wattpad}
+- {name: PointClickCare, ats: lever, board: pointclickcare}
+- {name: Wave, ats: lever, board: waveapps}
+- {name: Fullscript, ats: lever, board: fullscript}
+- {name: Achievers, ats: lever, board: achievers}
+- {name: RBC, ats: workday, host: rbc.wd3.myworkdayjobs.com, tenant: rbc, site: RBCGLOBAL1}
+- {name: TD Bank, ats: workday, host: td.wd3.myworkdayjobs.com, tenant: td, site: TD_Bank_Careers}
+- {name: CIBC, ats: workday, host: cibc.wd3.myworkdayjobs.com, tenant: cibc, site: search}
+- {name: BMO, ats: workday, host: bmo.wd3.myworkdayjobs.com, tenant: bmo, site: External}
+- {name: Manulife, ats: workday, host: manulife.wd3.myworkdayjobs.com, tenant: manulife, site: MFCJH_Jobs}
+- {name: Sun Life, ats: workday, host: sunlife.wd3.myworkdayjobs.com, tenant: sunlife, site: Experienced-Jobs}
+- {name: Thomson Reuters, ats: workday, host: thomsonreuters.wd5.myworkdayjobs.com, tenant: thomsonreuters, site: External_Career_Site}
