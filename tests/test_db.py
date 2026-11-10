@@ -162,3 +162,12 @@ def test_full_description_arriving_later_clears_score(db):
     add(db, posting(source="linkedin", external_id="li1", description="Full text " * 50))
     assert db.get_job(job_id)["score"] is None
     assert [j["id"] for j in db.jobs_to_score("h")] == [job_id]
+
+
+def test_date_only_posting_from_yesterday_found_today_is_new(db):
+    db.start_run("manual", T)  # first run
+    second = db.start_run("schedule", T)
+    # LinkedIn/Workday give only a date: posted yesterday, stored as midnight UTC; first seen this morning
+    add(db, posting(posted_at=iso(datetime(2026, 11, 8, tzinfo=timezone.utc))), run_id=second,
+        now=iso(datetime(2026, 11, 9, 11, 0, tzinfo=timezone.utc)))
+    assert len(db.list_jobs(now=T, tab="new")) == 1

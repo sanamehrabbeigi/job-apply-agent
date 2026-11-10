@@ -221,3 +221,25 @@ async def test_sources_see_jobs_without_full_description_as_unknown(db):
     await runner.run(trigger="manual")
     await runner.run(trigger="manual")
     assert seen == [False, False]
+
+
+async def test_bad_posting_is_a_warning_and_attempt_still_recorded(db):
+    def make():
+        good = jobs_a()[:1]
+        bad = JobPosting(url="https://gh/9", title="Data Analyst", company="Acme", external_id="9", board="acme")
+        bad.location = None  # a source handing back a null field
+        return good + [bad]
+
+    run = db.get_run(await make_runner(db, {"greenhouse": source(make)}).run(trigger="manual"))
+    stat = run["sources"]["greenhouse"]
+    assert stat["status"] == "partial" and "couldn't store" in stat["warnings"][0]
+    assert len(db.list_jobs(now=iso(NOW))) == 1
+    assert db.source_states()["greenhouse"]["last_attempt_at"] == iso(NOW)
+
+
+async def test_claude_login_failure_is_reported(db):
+    scorer = FakeScorer(lambda jobs: ScoreOutcome(failed=[j["id"] for j in jobs], auth_failed=True,
+                                                  errors=["Failed to authenticate"]))
+    run = db.get_run(await make_runner(db, {"greenhouse": source()}, scorer=scorer).run(trigger="manual"))
+    assert run["sources"]["scoring"]["status"] == "auth"
+    assert "login" in run["sources"]["scoring"]["message"]

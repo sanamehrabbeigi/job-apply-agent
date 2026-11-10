@@ -35,8 +35,8 @@ def to_posting(item: dict[str, Any]) -> JobPosting:
     remote = item.get("job_is_remote")
     return JobPosting(
         url=item.get("job_apply_link") or item.get("job_google_link") or "",
-        title=clean_inline(item.get("job_title", "")),
-        company=clean_inline(item.get("employer_name", "")),
+        title=clean_inline(item.get("job_title") or ""),
+        company=clean_inline(item.get("employer_name") or ""),
         location=location,
         details={"Publisher": item["job_publisher"]} if item.get("job_publisher") else {},
         description=(item.get("job_description") or "").strip(),

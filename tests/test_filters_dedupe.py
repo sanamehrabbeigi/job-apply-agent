@@ -95,3 +95,9 @@ def test_remote_jobs_in_different_countries_do_not_merge():
     us = job(title="Data Engineer", location="Remote - US", remote=True)
     ca = job(title="Data Engineer", location="Remote - Canada", remote=True)
     assert dedupe_key(us) != dedupe_key(ca)
+
+
+@pytest.mark.parametrize("title", ["Data Analyst – Remote", "Data Analyst — Toronto", "Data Analyst, Toronto",
+                                   "Data Analyst: Remote"])
+def test_title_suffix_variants_normalize(title):
+    assert normalize_title(title) == "data analyst"

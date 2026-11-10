@@ -89,3 +89,10 @@ async def test_default_query_is_looked_up_at_call_time(monkeypatch):
     monkeypatch.setattr(scoring, "query", fq)
     outcome = await score_jobs(JOBS[:1], resume="R", profile="", answers="", model="m")
     assert len(outcome.scores) == 1
+
+
+async def test_auth_failure_stops_remaining_batches():
+    fq = ScoringQuery(fail_calls={1}, error_text="Failed to authenticate: OAuth session expired and could not be refreshed")
+    outcome = await score_jobs(JOBS, resume="R", profile="", answers="", model="m", batch_size=3, concurrency=1,
+                               query_fn=fq)
+    assert outcome.auth_failed is True and len(fq.prompts) == 1 and outcome.scores == []

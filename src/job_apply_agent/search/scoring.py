@@ -51,6 +51,7 @@ SCORE_OUTPUT_SCHEMA: dict[str, Any] = {
     "required": ["results"],
 }
 
+AUTH_FAILED = re.compile(r"authenticat|oauth|invalid api key|not logged in|login", re.I)
 USAGE_LIMIT = re.compile(r"usage limit|rate[ _-]?limit|\b429\b|limit reached|overloaded|quota", re.I)
 BOILERPLATE = re.compile(
     r"^\s*(?:#+\s*)?(?:benefits|perks|what we offer|why join us|equal (?:employment )?opportunity|eeo\b"
@@ -80,6 +81,7 @@ class ScoreOutcome:
     failed: list[int] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     usage_limited: bool = False
+    auth_failed: bool = False
 
 
 def profile_hash(resume: str, profile: str, answers: str) -> str:
@@ -193,7 +195,10 @@ async def score_jobs(
                 message = str(exc) or exc.__class__.__name__
                 outcome.errors.append(message)
                 outcome.failed.extend(ids)
-                if USAGE_LIMIT.search(message):
+                if AUTH_FAILED.search(message):
+                    outcome.auth_failed = True
+                    stop.set()
+                elif USAGE_LIMIT.search(message):
                     outcome.usage_limited = True
                     stop.set()
                 return

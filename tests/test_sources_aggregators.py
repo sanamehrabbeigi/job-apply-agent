@@ -84,3 +84,12 @@ async def test_adzuna_maps_and_marks_partial():
 
 async def test_adzuna_skips_without_keys():
     assert (await SOURCES["adzuna"](make_ctx(env={"ADZUNA_APP_ID": "id"}))).skipped.startswith("no API key")
+
+
+def test_null_fields_do_not_break_parsing():
+    p = jsearch.to_posting({**JOB, "employer_name": None, "job_title": None, "job_description": None})
+    assert p.company == "" and p.title == "" and p.description == ""
+    from job_apply_agent.search.sources import adzuna
+
+    q = adzuna.to_posting({"id": "1", "title": None, "description": None, "company": None, "location": None})
+    assert q.title == "" and q.company == "" and q.location == ""

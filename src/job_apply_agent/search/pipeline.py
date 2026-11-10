@@ -126,37 +126,43 @@ class SearchRunner:
                           stats: dict[str, Any]) -> None:
         self.events.publish({"type": "run.source", "run_id": run_id, "source": name, "stat": {"status": "running"}})
         now = iso(self.now_fn())
+        success = False
         try:
             result = await self.sources[name](ctx)
-        except Exception as exc:  # noqa: BLE001 - one source failing must not stop the others
-            logger.warning("Source %s failed: %s", name, exc)
-            stats[name] = {"status": "error", "error": (str(exc) or exc.__class__.__name__)[:300]}
-            self.db.mark_source_attempt(name, now, success=False)
-        else:
             if result.skipped:
                 stats[name] = {"status": "skipped", "reason": result.skipped}
-                self.db.mark_source_attempt(name, now, success=False)
             else:
                 relevant = new = 0
+                warnings = list(result.warnings)
                 for posting in result.postings:
-                    posting.source = posting.source or name
-                    ok, label = evaluate(posting, prefs)
-                    _job_id, created = self.db.upsert_posting(
-                        posting, dedupe_key=dedupe_key(posting), canonical_url=canonical_url(posting.url),
-                        relevant=ok, location_label=label, run_id=run_id, now=now,
-                    )
+                    try:
+                        posting.source = posting.source or name
+                        ok, label = evaluate(posting, prefs)
+                        _job_id, created = self.db.upsert_posting(
+                            posting, dedupe_key=dedupe_key(posting), canonical_url=canonical_url(posting.url or ""),
+                            relevant=ok, location_label=label, run_id=run_id, now=now,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - one bad row must not lose the rest
+                        warnings.append(f"couldn't store “{posting.title}”: {exc}")
+                        continue
                     relevant += int(ok)
                     new += int(created and ok)
                 for board, ids in result.seen_ids.items():
                     self.db.mark_missing(name, board, ids)
                 stats[name] = {
-                    "status": "partial" if result.warnings else "ok",
+                    "status": "partial" if warnings else "ok",
                     "fetched": len(result.postings),
                     "relevant": relevant,
                     "new": new,
-                    "warnings": result.warnings[:10],
+                    "warnings": warnings[:10],
                 }
-                self.db.mark_source_attempt(name, now, success=True)
+                success = True
+        except Exception as exc:  # noqa: BLE001 - one source failing must not stop the others
+            logger.warning("Source %s failed: %s", name, exc)
+            stats[name] = {"status": "error", "error": (str(exc) or exc.__class__.__name__)[:300]}
+        finally:
+            # Always record the attempt, so the scheduler waits a full interval before trying again.
+            self.db.mark_source_attempt(name, now, success=success)
         self.events.publish({"type": "run.source", "run_id": run_id, "source": name, "stat": stats[name]})
 
     async def _score(self, prefs: dict[str, Any], run_id: int) -> dict[str, Any]:
@@ -183,7 +189,10 @@ class SearchRunner:
         for s in outcome.scores:
             self.db.save_score(s.job_id, score=s.score, summary=s.summary, reasons=s.reasons, gaps=s.gaps,
                                seniority_fit=s.seniority_fit, model=model, profile_hash=phash, now=now)
-        if outcome.usage_limited:
+        if outcome.auth_failed:
+            status, message = "auth", ("Claude login failed or expired. Run `claude` and /login, or put "
+                                       "CLAUDE_CODE_OAUTH_TOKEN in data/.env, then search again.")
+        elif outcome.usage_limited:
             status, message = "limited", "Claude usage limit reached; the rest will be scored on the next run."
         elif outcome.failed:
             status, message = "partial", f"{len(outcome.failed)} job(s) couldn't be scored this time; they'll be retried."

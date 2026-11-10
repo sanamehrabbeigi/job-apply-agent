@@ -15,7 +15,8 @@ KNOWN_CITIES = [
 ]
 _LEGAL = re.compile(r"\b(?:inc|incorporated|ltd|limited|llc|llp|lp|corp|corporation|co|company|plc|ulc|gmbh)\b")
 _BRACKETS = re.compile(r"\([^)]*\)|\[[^\]]*\]")
-_TRAILING_PLACE = re.compile(r"\s+[-–—|,]\s*(?:remote|hybrid|on[- ]?site|in[- ]office|toronto|ottawa|canada|gta)\b.*$")
+_TRAILING_PLACE = re.compile(r"\s*[-|,:]\s*(?:remote|hybrid|on[- ]?site|in[- ]office|toronto|ottawa|canada|gta)\b.*$")
+_DASHES = str.maketrans({"–": "-", "—": "-", "‒": "-", "―": "-"})
 _ABBREVIATIONS = {"sr": "senior", "jr": "junior", "mgr": "manager", "eng": "engineer"}
 _TRACKING_PARAMS = {"src", "source", "ref", "referrer", "gh_src", "lever-source", "lever-origin", "trk", "refid"}
 
@@ -34,7 +35,7 @@ def normalize_company(name: str) -> str:
 
 
 def normalize_title(title: str) -> str:
-    text = _TRAILING_PLACE.sub("", _BRACKETS.sub(" ", fold(title)))
+    text = _TRAILING_PLACE.sub("", _BRACKETS.sub(" ", fold((title or "").translate(_DASHES))))
     return " ".join(_ABBREVIATIONS.get(word, word) for word in _words(text))
 
 

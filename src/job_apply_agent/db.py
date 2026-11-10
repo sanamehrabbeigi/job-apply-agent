@@ -91,9 +91,11 @@ LIST_COLUMNS = (
     "j.last_seen_at, j.score, j.summary, j.seniority_fit, j.status, j.closed, j.tailored_folder"
 )
 SOURCES_SUBQUERY = "(SELECT GROUP_CONCAT(DISTINCT l.source) FROM job_links l WHERE l.job_id = j.id) AS sources"
+# New = posted in the last 24h, or first seen in the last 24h (not by the very first run) with no posting date
+# or a date-only posting date from the day before (LinkedIn/Workday give dates, stored as midnight UTC).
 NEW_SQL = (
-    "(j.posted_at >= ? OR (j.posted_at IS NULL AND j.first_seen_at >= ? "
-    "AND j.first_run_id IS NOT NULL AND j.first_run_id != ?))"
+    "(j.posted_at >= ? OR (j.first_seen_at >= ? AND j.first_run_id IS NOT NULL AND j.first_run_id != ? "
+    "AND (j.posted_at IS NULL OR j.posted_at >= ?)))"
 )
 SORTS = {
     "score": "j.score IS NULL, j.score {o}, COALESCE(j.posted_at, j.first_seen_at) DESC",
@@ -360,7 +362,7 @@ class Database:
         if tab == "new":
             cutoff = _shift(now, hours=24)
             where.append(NEW_SQL)
-            args += [cutoff, cutoff, self.first_run_id() or -1]
+            args += [cutoff, cutoff, self.first_run_id() or -1, _shift(now, hours=48)]
         if role:
             where.append("LOWER(j.title) LIKE ?")
             args.append(f"%{role.lower()}%")
@@ -423,7 +425,7 @@ class Database:
         relevant = self._one(f"SELECT COUNT(*) AS n FROM jobs j WHERE {visible}", (stale,))["n"]
         unscored = self._one(f"SELECT COUNT(*) AS n FROM jobs j WHERE {visible} AND j.score IS NULL", (stale,))["n"]
         new_24h = self._one(f"SELECT COUNT(*) AS n FROM jobs j WHERE {visible} AND {NEW_SQL}",
-                            (stale, cutoff, cutoff, self.first_run_id() or -1))["n"]
+                            (stale, cutoff, cutoff, self.first_run_id() or -1, _shift(now, hours=48)))["n"]
         return {"relevant": relevant, "unscored": unscored, "new_24h": new_24h}
 
     # --- quota --------------------------------------------------------------------------

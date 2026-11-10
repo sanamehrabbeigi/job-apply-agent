@@ -16,11 +16,11 @@ URL = "https://api.adzuna.com/v1/api/jobs/ca/search/1"
 def to_posting(item: dict[str, Any]) -> JobPosting:
     location = item.get("location") or {}
     return JobPosting(
-        url=item.get("redirect_url", ""),
-        title=clean_inline(item.get("title", "")),
-        company=clean_inline((item.get("company") or {}).get("display_name", "")),
-        location=location.get("display_name", ""),
-        description=clean_inline(item.get("description", "")),
+        url=item.get("redirect_url") or "",
+        title=clean_inline(item.get("title") or ""),
+        company=clean_inline((item.get("company") or {}).get("display_name") or ""),
+        location=location.get("display_name") or "",
+        description=clean_inline(item.get("description") or ""),
         description_is_partial=True,
         source="adzuna",
         external_id=str(item.get("id", "")),
@@ -60,6 +60,6 @@ async def fetch(ctx: SourceContext) -> SourceResult:
                 result.warnings.append(f"{what} in {where}: {exc}")
                 continue
             items = data.get("results") or []
-            result.postings.extend(to_posting(i) for i in items if i.get("id") and ctx.role_ok(clean_inline(i.get("title", ""))))
+            result.postings.extend(to_posting(i) for i in items if i.get("id") and ctx.role_ok(clean_inline(i.get("title") or "")))
             ctx.progress(f"{what} in {where}: {len(items)} results")
     return result
