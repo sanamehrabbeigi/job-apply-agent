@@ -1,33 +1,22 @@
-"""Command-line interface: ``job-agent tailor ...``, ``job-agent fetch-job ...``, ``job-agent render ...``."""
+"""Command-line interface: ``job-agent tailor|fetch-job|render|search|serve ...``."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import re
 import sys
 from collections.abc import Callable
-from datetime import date
 from pathlib import Path
 
-from . import __version__
-from .career_profile import DEFAULT_PROFILE_DIR, load_answers, load_profile, save_answers
-from .documents import ConversionError, docx_to_pdf, read_resume, write_docx
+from . import __version__, paths
+from .documents import ConversionError, docx_to_pdf, write_docx
 from .jobs import JobFetchError, fetch_job
-from .tailor import DEFAULT_TARGET_SCORE, TailoredResume, TailoringError, auth_warning, tailor_resume
+from .outputs import candidate_name, save_outputs, slugify  # noqa: F401  (re-exported for compatibility)
+from .preferences import load_preferences, resume_path
+from .tailor import DEFAULT_TARGET_SCORE, TailoringError, auth_warning
+from .tailor_flow import TailorRequest, run_tailor_flow
 
 FORMATS = ("md", "docx", "pdf")
-
-
-def slugify(text: str, max_len: int = 40) -> str:
-    slug = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-")
-    return slug[:max_len].strip("-") or "job"
-
-
-def candidate_name(markdown: str) -> str:
-    """Name from the resume's first '# ' heading, e.g. 'Jane_Doe'."""
-    match = re.search(r"^#\s+(.+)$", markdown, flags=re.MULTILINE)
-    return slugify(match.group(1), 40).replace("-", "_") if match else "Resume"
 
 
 def parse_formats(value: str) -> list[str]:
@@ -44,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     t = sub.add_parser("tailor", help="Tailor your resume to a job posting.")
-    t.add_argument("--resume", required=True, type=Path, help="Your master resume (.docx, .md or .txt).")
+    t.add_argument("--resume", type=Path, help="Your master resume (.docx, .md or .txt). Default: the one set in the app.")
     job = t.add_mutually_exclusive_group(required=True)
     job.add_argument("--job-url", help="Link to the job posting (LinkedIn links of any kind work).")
     job.add_argument("--job-file", type=Path, help="Text file with the job posting.")
@@ -52,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument(
         "--profile-dir",
         type=Path,
-        default=DEFAULT_PROFILE_DIR,
-        help=f"Folder with your career profile documents and saved answers (default: {DEFAULT_PROFILE_DIR}).",
+        default=paths.profile_dir(),
+        help=f"Folder with your career profile documents and saved answers (default: {paths.profile_dir()}).",
     )
     t.add_argument("--profile", type=Path, action="append", default=[], help="Extra profile document (repeatable).")
     t.add_argument(
@@ -61,8 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     t.add_argument("--max-rounds", type=int, default=3, help="Max rewrite rounds with your answers (default: 3).")
     t.add_argument("--no-questions", action="store_true", help="Don't ask questions; do a single rewrite.")
-    t.add_argument("--jobs-dir", type=Path, default=Path("data/jobs"), help="Where fetched postings are saved.")
-    t.add_argument("--out", type=Path, default=Path("output"), help="Output folder (default: ./output).")
+    t.add_argument("--jobs-dir", type=Path, default=paths.jobs_dir(), help="Where fetched postings are saved.")
+    t.add_argument("--out", type=Path, default=paths.output_dir(), help="Output folder (default: ./output).")
     t.add_argument(
         "--formats",
         type=parse_formats,
@@ -75,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     f = sub.add_parser("fetch-job", help="Save a job posting from a link as a text file.")
     f.add_argument("url", help="Job posting link (LinkedIn links of any kind work).")
-    f.add_argument("--jobs-dir", type=Path, default=Path("data/jobs"), help="Folder to save into (default: data/jobs).")
+    f.add_argument("--jobs-dir", type=Path, default=paths.jobs_dir(), help="Folder to save into (default: data/jobs).")
 
     r = sub.add_parser("render", help="Re-create the .docx/.pdf from a (hand-edited) resume .md file.")
     r.add_argument("markdown", type=Path, help="Resume Markdown file, e.g. output/.../Name_Resume_Company.md")
@@ -96,40 +85,6 @@ def run_render(args: argparse.Namespace) -> int:
     for path in saved:
         print(f"Saved {path}")
     return 0
-
-
-def save_outputs(
-    tailored: TailoredResume, out_root: Path, formats: list[str], reference_docx: Path | None
-) -> tuple[Path, list[Path]]:
-    folder_name = f"{date.today():%Y-%m-%d}_{slugify(tailored.company or 'company', 30)}_{slugify(tailored.job_title)}"
-    folder = out_root / folder_name
-    folder.mkdir(parents=True, exist_ok=True)
-
-    base = f"{candidate_name(tailored.tailored_resume_markdown)}_Resume"
-    if tailored.company:
-        base += f"_{slugify(tailored.company, 30).replace('-', '_')}"
-
-    saved: list[Path] = []
-    md_path = folder / f"{base}.md"
-    md_path.write_text(tailored.tailored_resume_markdown + "\n", encoding="utf-8")
-    saved.append(md_path)
-
-    report_path = folder / "tailoring_report.md"
-    report_path.write_text(tailored.report_markdown(), encoding="utf-8")
-    saved.append(report_path)
-
-    if "docx" in formats or "pdf" in formats:
-        docx_path = write_docx(tailored.tailored_resume_markdown, folder / f"{base}.docx", reference_docx)
-        if "docx" in formats:
-            saved.append(docx_path)
-        if "pdf" in formats:
-            try:
-                saved.append(docx_to_pdf(docx_path))
-            except ConversionError as exc:
-                print(f"! PDF skipped: {exc}", file=sys.stderr)
-            if "docx" not in formats:
-                docx_path.unlink(missing_ok=True)
-    return folder, saved
 
 
 def run_fetch_job(args: argparse.Namespace) -> int:
@@ -172,58 +127,49 @@ async def run_tailor(args: argparse.Namespace, ask: Callable[[str], str] = input
     if warning:
         print(f"! {warning}", file=sys.stderr)
 
-    resume_md = read_resume(args.resume)
-    profile = load_profile(args.profile_dir, args.profile)
-    if profile:
-        print(f"Using career profile from {args.profile_dir}" + (f" and {len(args.profile)} extra file(s)" if args.profile else ""))
+    resume = args.resume or resume_path(load_preferences())
+    if not resume.is_file():
+        raise FileNotFoundError(f"Resume not found: {resume}. Pass --resume or add it in the app's Settings.")
     job_text, job_url = resolve_job(args)
     interactive = not args.no_questions and (ask is not input or sys.stdin.isatty())
-    progress = None if args.quiet else (lambda msg: print(f"  · {msg}"))
 
-    tailored: TailoredResume | None = None
-    for round_no in range(1, max(1, args.max_rounds) + 1):
-        print(f"\nRound {round_no}: tailoring {args.resume.name} ... (usually a minute or two)")
-        tailored = await tailor_resume(
-            resume_md,
-            job_text=job_text,
-            job_url=job_url,
-            profile=profile,
-            answers=load_answers(args.profile_dir),
-            target_score=args.target_score,
-            extra_instructions=args.instructions,
-            model=args.model,
-            on_progress=progress,
-        )
-        print(f"Estimated match: {tailored.match_score}/100 (target {args.target_score})")
-        if (
-            tailored.match_score >= args.target_score
-            or not tailored.questions_for_candidate
-            or not interactive
-            or round_no == args.max_rounds
-        ):
-            break
-        answered = ask_questions(tailored.questions_for_candidate, ask)
-        if not answered:
-            break
-        path = save_answers(args.profile_dir, f"{tailored.job_title} at {tailored.company}", answered)
-        print(f"Saved your answers to {path} (reused for future jobs).")
+    async def terminal_ask(questions: list[str]) -> list[tuple[str, str]]:
+        return ask_questions(questions, ask)
 
-    assert tailored is not None
-    reference = args.resume if args.resume.suffix.lower() == ".docx" else None
-    folder, saved = save_outputs(tailored, args.out, args.formats, reference)
+    req = TailorRequest(
+        resume_path=resume,
+        job_text=job_text,
+        job_url=job_url,
+        profile_dir=args.profile_dir,
+        extra_profile=args.profile,
+        target_score=args.target_score,
+        max_rounds=args.max_rounds,
+        model=args.model,
+        instructions=args.instructions,
+        formats=args.formats,
+        out_dir=args.out,
+    )
+    outcome = await run_tailor_flow(
+        req,
+        ask=terminal_ask if interactive else None,
+        progress=None if args.quiet else (lambda msg: print(f"  · {msg}")),
+        status=lambda msg: print(f"\n{msg}" if msg.startswith("Round") else msg),
+    )
+    for note in outcome.warnings:
+        print(f"! {note}", file=sys.stderr)
 
+    tailored = outcome.tailored
     print(f"\nDone: {tailored.job_title}{' at ' + tailored.company if tailored.company else ''}")
     print(f"Estimated match: {tailored.match_score}/100")
     if tailored.match_score < args.target_score:
         print("Below target. See the report's questions; answering them truthfully is the way to raise it.")
     if tailored.missing_keywords:
         print("Not shown in your resume or profile (not added): " + ", ".join(tailored.missing_keywords))
-    print(f"\nSaved to {folder}/")
-    for path in saved:
+    print(f"\nSaved to {outcome.folder}/")
+    for path in outcome.files:
         print(f"  - {path.name}")
     print("\nReview the resume before sending it: check every line is true and reads like you.")
     return 0
-
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)

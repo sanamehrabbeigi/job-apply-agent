@@ -22,6 +22,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import paths
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -41,6 +43,15 @@ class JobPosting:
     location: str = ""
     details: dict[str, str] = field(default_factory=dict)
     description: str = ""
+    # Filled in by job search sources:
+    source: str = ""  # greenhouse, lever, ashby, workday, jsearch, adzuna, linkedin
+    external_id: str = ""  # the source's own ID for the job
+    posted_at: str | None = None  # ISO 8601 UTC, when known
+    remote: bool | None = None  # None = not stated
+    country: str = ""
+    employment_type: str = ""
+    description_is_partial: bool = False  # True when the source only gives a snippet
+    board: str = ""  # company board ID for career-site sources
 
     def to_text(self) -> str:
         lines = [f"Source: {self.url}"]
@@ -54,8 +65,8 @@ class JobPosting:
         lines += ["", "Description:", self.description.strip()]
         return "\n".join(lines).strip() + "\n"
 
-    def save(self, folder: str | Path = "data/jobs") -> Path:
-        folder = Path(folder)
+    def save(self, folder: str | Path | None = None) -> Path:
+        folder = Path(folder) if folder is not None else paths.jobs_dir()
         folder.mkdir(parents=True, exist_ok=True)
         name = "_".join(
             part for part in (_slug(self.company), _slug(self.title), linkedin_job_id(self.url) or "") if part
@@ -179,6 +190,9 @@ def html_to_text(fragment: str) -> str:
 
 def _clean_inline(fragment: str) -> str:
     return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", fragment)).split())
+
+
+clean_inline = _clean_inline
 
 
 def _http_get(url: str, timeout: float) -> str:
