@@ -77,6 +77,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated sources, e.g. greenhouse,lever (default: all enabled).",
     )
     se.add_argument("--no-score", action="store_true", help="Collect jobs without Claude scoring.")
+    sv = sub.add_parser("serve", help="Open the job app in your browser (http://127.0.0.1:8000).")
+    sv.add_argument("--port", type=int, default=8000, help="Port (default: 8000).")
+    sv.add_argument("--no-browser", action="store_true", help="Don't open the browser automatically.")
+    sv.add_argument("--no-schedule", action="store_true", help="Don't run scheduled searches while the app is open.")
     return parser
 
 
@@ -207,6 +211,23 @@ def run_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_serve(args: argparse.Namespace) -> int:
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from .web import app as web_app
+
+    application = web_app.create_app(start_scheduler=not args.no_schedule)
+    url = f"http://127.0.0.1:{args.port}"
+    print(f"Job app running at {url} (press Ctrl+C to stop)")
+    if not args.no_browser:
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    uvicorn.run(application, host="127.0.0.1", port=args.port, log_level="info")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -218,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_fetch_job(args)
         if args.command == "search":
             return run_search(args)
+        if args.command == "serve":
+            return run_serve(args)
     except (FileNotFoundError, ConversionError, TailoringError, JobFetchError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
