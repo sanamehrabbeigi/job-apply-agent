@@ -13,10 +13,18 @@ apply, with me in control of what gets sent.**
 - [x] **Career profile.** Extra documents in `data/profile/` that the agent can draw on.
 - [x] **Ask-then-rewrite loop.** The agent targets a match score (85 by default), asks about
   gaps, saves the answers, and rewrites with them.
+- [x] **Local web app.** `job-agent serve`: FastAPI backend + React/TypeScript UI.
+- [x] **Job search.** Greenhouse, Lever, Ashby, Workday, JSearch, Adzuna and LinkedIn guest search,
+  deduplicated in SQLite, with a relevance gate and free-tier quota budgets.
+- [x] **Claude ranking.** Every relevant job scored by Claude Haiku 5.5 with reasons and gaps.
+- [x] **Schedule + tracker.** Per-source intervals while the app is open; status and notes per job.
 
 ---
 
-## Phase 2: Find and rank the best jobs for me
+## Phase 2: Find and rank the best jobs for me (done)
+
+Built as described below, as a local web app. Glassdoor and Indeed listings arrive through
+JSearch (Google for Jobs); there is no direct connector for them.
 
 **Goal:** the agent searches several job sources and shows me a ranked shortlist of the
 jobs that best match my profile, with a short reason for each. I pick which ones to

@@ -3,10 +3,16 @@
 A personal AI agent that helps you apply to jobs, built on the
 [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) (Python).
 
-**Phase 1 feature: resume tailoring.** Give it your general (master) resume and a job
-posting. It writes a resume tailored to that job, using only your real experience, and
-saves it as Markdown, Word (.docx) and PDF, plus a report of what it changed and what's
-missing.
+**What it does:**
+
+- **Finds jobs for you.** On demand or on a schedule, it searches Canadian company career sites
+  (Greenhouse, Lever, Ashby, Workday), JSearch (Google for Jobs: LinkedIn, Indeed, Glassdoor...),
+  Adzuna and LinkedIn's public job search for Data Analyst, Data Scientist and Data Engineer roles
+  in Toronto/GTA, Remote (Canada) and Ottawa.
+- **Ranks every job by fit.** Claude Haiku 5.5 reads each relevant posting with your resume and
+  profile and gives a match score, the reasons you fit, and the gaps.
+- **Tailors your resume** to any job in one click: Markdown, Word (.docx) and PDF, plus a report
+  of what changed and what's missing. It asks you about gaps and never invents experience.
 
 > **Honesty by design:** the agent is told never to invent employers, titles, dates,
 > skills or metrics. If the job asks for something your resume doesn't show, the agent
@@ -81,9 +87,54 @@ subscription and you are billed per token on the API. The CLI warns you when it'
 Tailoring a resume uses your subscription's normal usage limits, which are shared with
 claude.ai. One run is a single, fairly short request.
 
+## The app
+
+```bash
+job-agent serve            # opens http://127.0.0.1:8000 in your browser
+```
+
+- **New (24h)** and **All jobs** tabs, both ranked by match score. Click a column to re-sort;
+  filter by role, location, source, status or minimum score.
+- Click a job for the score, reasons, gaps, full description and links. Set its status
+  (saved, applied, interview...), add notes, or click **Tailor my resume for this job**.
+- **Search now** runs every enabled source. While the app is open it also searches on a
+  schedule: company sites hourly, JSearch daily, Adzuna every 8 hours, LinkedIn twice a day.
+  Change this in **Settings**, where you also upload your resume and profile documents, edit the
+  job title terms, locations and excluded companies, and manage the company list.
+
+Run a search without the UI (for cron or Task Scheduler):
+
+```bash
+job-agent search                         # all enabled sources, then Claude scoring
+job-agent search --sources greenhouse,lever --no-score
+```
+
+### Optional API keys (free tiers)
+
+Create `data/.env` (git-ignored):
+
+```bash
+JSEARCH_API_KEY=...      # https://rapidapi.com -> JSearch, Basic (free) plan
+ADZUNA_APP_ID=...        # https://developer.adzuna.com -> free key
+ADZUNA_APP_KEY=...
+CLAUDE_CODE_OAUTH_TOKEN=...   # optional: from `claude setup-token`, if the claude login expires
+```
+
+Without keys those two sources are skipped and everything else works. The app counts calls and
+stops at a budget under each free tier (JSearch 180/month, Adzuna 100/day; editable in
+`data/preferences.yaml`).
+
+### How searching stays light on your Claude usage
+
+Only jobs whose title matches your role terms and whose location is in your target areas are
+scored, and each job is scored once (again only if you change your resume or profile).
+Scoring uses Claude Haiku 5.5, the smallest current model.
+
 ## Usage
 
 ### 1. Add your documents
+
+(You can also upload them in the app's **Settings**. Once a resume is set there, `--resume` is optional.)
 
 ```
 data/
@@ -172,10 +223,19 @@ job-agent render output/<folder>/<Name>_Resume_<Company>.md --reference data/my_
 
 ```bash
 pip install -e ".[dev]"
+ruff check src tests
 pytest
+
+cd frontend
+npm install
+npm test
+npm run dev        # UI on http://localhost:5173, proxied to `job-agent serve` on :8000
+npm run build      # writes the production UI into src/job_apply_agent/web/static/
 ```
 
-The tests don't call Claude: the SDK call is mocked, and the document conversions run for real.
+The tests don't call Claude or any job site: the SDK and HTTP calls are faked, and the
+document conversions run for real. The built UI is committed, so running the app needs only
+Python.
 
 ## Project layout
 
@@ -188,6 +248,14 @@ src/job_apply_agent/
   career_profile.py  # Load data/profile/ documents, save your answers
   documents.py  # DOCX -> Markdown (pandoc), DOCX -> PDF (LibreOffice / Word)
   render.py     # Markdown -> styled resume .docx
+  tailor_flow.py     # Ask-then-rewrite loop shared by the CLI and the app
+  tailor_sessions.py # Tailoring started from the browser
+  db.py         # SQLite: jobs, links per source, runs, quotas (data/app.db)
+  preferences.py# data/preferences.yaml (roles, locations, sources, models)
+  runtime.py    # Wires the database, search runner and scheduler together
+  search/       # Sources, relevance gate, dedupe, Claude scoring, pipeline, scheduler
+  web/          # FastAPI app + built UI (static/)
+frontend/       # React + TypeScript UI source (Vite)
 examples/       # Fictional resume and job posting for trying it out
 tests/
 ```
@@ -196,7 +264,7 @@ tests/
 
 See **[ROADMAP.md](ROADMAP.md)** for what's next:
 
-- **Phase 2: find and rank the best jobs.** Search LinkedIn, Indeed, company career pages
-  and more, filter by my preferences, and show a ranked shortlist with reasons.
+- **Phase 2: find and rank the best jobs.** Done: the app searches job sites and ranks every
+  relevant job with Claude.
 - **Phase 3: help me apply.** Application kit (resume, cover letter, answers to
   application questions), then assisted form filling where I review and click "Submit".
