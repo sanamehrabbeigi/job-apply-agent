@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,8 +29,8 @@ from ..tailor_sessions import MissingResume, NotWaiting
 from ..timeutil import iso
 
 STATIC_DIR = Path(__file__).with_name("static")
-RESUME_SUFFIXES = {".docx", ".md", ".txt"}
-PROFILE_SUFFIXES = {".docx", ".md", ".markdown", ".txt"}
+RESUME_SUFFIXES = {".docx", ".pdf", ".md", ".txt"}
+PROFILE_SUFFIXES = {".docx", ".pdf", ".md", ".markdown", ".txt"}
 Status = Literal["new", "saved", "applied", "interview", "offer", "rejected"]
 
 
@@ -106,10 +106,12 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         min_score: int | None = None,
         include_closed: bool = False,
         hide_done: bool = False,
+        q: str | None = None,
+        posted_within_days: int | None = Query(None, ge=1, le=365),
     ) -> dict[str, Any]:
         jobs = rt.db.list_jobs(now=now(), tab=tab, sort=sort, order=order, role=role, location=location,
                                source=source, status=status, min_score=min_score, include_closed=include_closed,
-                               hide_done=hide_done)
+                               hide_done=hide_done, q=q, posted_within_days=posted_within_days)
         return {"jobs": jobs, "counts": rt.db.counts(now())}
 
     def tailored_files(folder: str | None) -> list[str]:
@@ -238,7 +240,7 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
     async def upload_resume(file: UploadFile) -> dict[str, Any]:
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in RESUME_SUFFIXES:
-            raise HTTPException(422, "Upload your resume as .docx, .md or .txt.")
+            raise HTTPException(422, "Upload your resume as .docx, .pdf, .md or .txt.")
         target = paths.data_dir() / f"my_resume{suffix}"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(await file.read())
@@ -248,13 +250,18 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         if prefs.get("resume_path"):  # a custom path would hide the upload; go back to the default location
             prefs["resume_path"] = ""
             save_preferences(prefs)
+        if not rt.runner.running:
+            # Score the jobs that have no score yet right away. Jobs scored against an older resume are
+            # re-scored only when she confirms (the "Re-score" banner).
+            keep(asyncio.create_task(rt.runner.run(trigger="resume", sources=[])))
+            await asyncio.sleep(0)
         return profile_info()
 
     @app.post("/api/profile/documents")
     async def upload_document(file: UploadFile) -> dict[str, Any]:
         name = Path(file.filename or "").name
         if Path(name).suffix.lower() not in PROFILE_SUFFIXES:
-            raise HTTPException(422, "Profile documents must be .docx, .md or .txt.")
+            raise HTTPException(422, "Profile documents must be .docx, .pdf, .md or .txt.")
         if name.lower() == "answers.md":
             raise HTTPException(422, "answers.md is managed by the app; pick another file name.")
         folder = paths.profile_dir()

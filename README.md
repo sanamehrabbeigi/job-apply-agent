@@ -22,7 +22,7 @@ A personal AI agent that helps you apply to jobs, built on the
 ## How it works
 
 ```
-master resume (.docx) ──pandoc──► Markdown ─┐
+master resume (.docx/.pdf) ──► text ────────┐
 job posting (file / text / URL) ────────────┼─► Claude (Agent SDK, structured JSON output)
                                             │
                     tailored Markdown ◄─────┘
@@ -138,7 +138,7 @@ Scoring uses Claude Haiku 5.5, the smallest current model.
 
 ```
 data/
-  my_resume.docx          # your current resume (the starting point)
+  my_resume.docx          # your current resume (the starting point; .pdf, .md and .txt work too)
   profile/                # your career profile: anything with more detail
     work_history.docx     #   full job history, every project and achievement
     skills.md             #   tools, certificates, courses...
@@ -146,7 +146,7 @@ data/
   jobs/                   # job postings fetched from links (created automatically)
 ```
 
-The agent can use **any fact** from `data/profile/` (Word, Markdown or text files), even
+The agent can use **any fact** from `data/profile/` (Word, PDF, Markdown or text files), even
 if it's not in your resume, and picks what fits each job. The `data/` and `output/`
 folders and all `.docx`/`.pdf` files are git-ignored, so your personal information is
 never committed.

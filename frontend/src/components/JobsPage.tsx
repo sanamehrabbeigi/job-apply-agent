@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { api, type JobQuery } from "../api";
 import { nextSort } from "../lib/format";
-import type { Counts, JobRow, SortState } from "../types";
+import type { Counts, JobRow, SortKey, SortState } from "../types";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "score", label: "Match score" },
+  { key: "posted", label: "Date posted" },
+  { key: "company", label: "Company" },
+  { key: "title", label: "Job title" },
+];
 import { DEFAULT_FILTERS, FiltersBar, type Filters } from "./FiltersBar";
 import { JobPanel } from "./JobPanel";
 import { JobsTable } from "./JobsTable";
@@ -27,6 +34,8 @@ export function JobsPage({ refreshKey }: { refreshKey: number }) {
       min_score: filters.minScore === "" ? undefined : Number(filters.minScore),
       hide_done: filters.hideDone,
       include_closed: filters.includeClosed,
+      q: filters.search.trim() || undefined,
+      posted_within_days: filters.postedWithin ? Number(filters.postedWithin) : undefined,
     };
     api
       .jobs(query)
@@ -55,6 +64,28 @@ export function JobsPage({ refreshKey }: { refreshKey: number }) {
           <button role="tab" aria-selected={tab === "all"} className={tab === "all" ? "tab active" : "tab"} onClick={() => setTab("all")}>
             All jobs{counts && <span className="count">{counts.relevant}</span>}
           </button>
+        </div>
+        <div className="sortbar">
+          <label>
+            Sort by{" "}
+            <select value={sort.sort} onChange={(e) => setSort(nextSort({ sort: sort.sort, order: sort.order }, e.target.value as SortKey))}>
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setSort({ ...sort, order: sort.order === "desc" ? "asc" : "desc" })}
+            aria-label="Change sort direction"
+          >
+            {sort.sort === "score"
+              ? sort.order === "desc" ? "Highest first" : "Lowest first"
+              : sort.sort === "posted"
+                ? sort.order === "desc" ? "Newest first" : "Oldest first"
+                : sort.order === "asc" ? "A → Z" : "Z → A"}
+          </button>
+          {data && <span className="muted">{data.jobs.length} job(s)</span>}
         </div>
         <FiltersBar value={filters} onChange={setFilters} />
         {counts && counts.unscored > 0 && <p className="muted">{counts.unscored} job(s) waiting for a match score.</p>}

@@ -46,6 +46,8 @@ export interface JobQuery {
   min_score?: number;
   hide_done?: boolean;
   include_closed?: boolean;
+  q?: string;
+  posted_within_days?: number;
 }
 
 export function jobsQueryString(query: JobQuery): string {

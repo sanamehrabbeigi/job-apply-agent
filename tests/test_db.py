@@ -178,3 +178,32 @@ def test_date_only_posting_from_yesterday_found_today_is_new(db):
 def test_stale_jobs_are_never_scored(db):
     add(db, posting(), now=iso(NOW - timedelta(days=30)))
     assert db.jobs_to_score("h", now=T) == []
+
+
+def test_keyword_search_matches_title_company_or_description(db):
+    add(db, posting(title="BI Analyst", description="Build Power BI dashboards. " * 20), key="a")
+    add(db, posting(external_id="2", url="https://jobs.example/2", title="Data Engineer", company="Wealthsimple",
+                    description="Spark pipelines. " * 20), key="b")
+    assert [j["title"] for j in db.list_jobs(now=T, q="power bi")] == ["BI Analyst"]
+    assert [j["title"] for j in db.list_jobs(now=T, q="WEALTHSIMPLE")] == ["Data Engineer"]
+    assert [j["title"] for j in db.list_jobs(now=T, q="engineer spark")] == ["Data Engineer"]  # all words must match
+    assert db.list_jobs(now=T, q="engineer dashboards") == []
+    assert len(db.list_jobs(now=T, q="   ")) == 2  # blank search = no filter
+
+
+def test_posted_within_days_uses_posting_date_or_first_seen(db):
+    add(db, posting(posted_at=iso(NOW - timedelta(days=2))), key="a")
+    add(db, posting(external_id="2", url="https://jobs.example/2", title="Old", posted_at=iso(NOW - timedelta(days=10))),
+        key="b")
+    add(db, posting(external_id="3", url="https://jobs.example/3", title="No date", posted_at=None), key="c")
+    assert {j["title"] for j in db.list_jobs(now=T, posted_within_days=3)} == {"Data Analyst", "No date"}
+    assert len(db.list_jobs(now=T, posted_within_days=30)) == 3
+
+
+def test_keyword_search_short_words_match_whole_words_only(db):
+    add(db, posting(title="Data Analyst", description="Responsibilities include stakeholder ability. " * 20), key="a")
+    add(db, posting(external_id="2", url="https://jobs.example/2", title="BI Developer",
+                    description="Own the Power BI estate. " * 20), key="b")
+    assert [j["title"] for j in db.list_jobs(now=T, q="bi")] == ["BI Developer"]
+    assert [j["title"] for j in db.list_jobs(now=T, q="power bi")] == ["BI Developer"]
+    assert [j["title"] for j in db.list_jobs(now=T, q="analy")] == ["Data Analyst"]  # longer words match prefixes

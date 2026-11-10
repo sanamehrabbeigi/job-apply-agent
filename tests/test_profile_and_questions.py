@@ -102,3 +102,12 @@ def test_tailor_with_job_url_fetches_posting_first(monkeypatch, tmp_path: Path, 
     assert code == 0
     assert "<job_posting>" in fq.prompts[0] and "Example Co" in fq.prompts[0]  # text, not WebFetch
     assert (tmp_path / "jobs" / "example-co_data-analyst_123456789.txt").exists()
+
+
+def test_load_profile_reads_pdf_documents(tmp_path: Path):
+    from pdf_helpers import write_text_pdf
+
+    folder = tmp_path / "profile"
+    folder.mkdir()
+    write_text_pdf(folder / "certificates.pdf", ["Google Data Analytics Certificate 2024"])
+    assert "Google Data Analytics Certificate" in load_profile(folder)

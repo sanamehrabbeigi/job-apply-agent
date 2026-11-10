@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from datetime import timedelta
@@ -127,6 +128,16 @@ def _run(row: sqlite3.Row) -> dict[str, Any]:
     return run
 
 
+def _word_pattern(word: str) -> str:
+    """Short words (<= 3 letters, e.g. "BI", "SQL") must match whole words; longer ones match word starts."""
+    escaped = re.escape(word)
+    return rf"\b{escaped}\b" if len(word) <= 3 else rf"\b{escaped}"
+
+
+def _matches_word(text: str | None, pattern: str) -> int:
+    return int(bool(text) and re.search(pattern, text, re.IGNORECASE) is not None)
+
+
 def _shift(now: str, **delta) -> str:
     parsed = parse_datetime(now)
     assert parsed is not None, f"bad timestamp {now!r}"
@@ -140,6 +151,7 @@ class Database:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._conn.create_function("MATCHES_WORD", 2, _matches_word, deterministic=True)
         self._lock = threading.RLock()
         with self._lock:
             self._conn.execute("PRAGMA foreign_keys = ON")
@@ -365,6 +377,8 @@ class Database:
         min_score: int | None = None,
         include_closed: bool = False,
         hide_done: bool = False,
+        q: str | None = None,
+        posted_within_days: int | None = None,
     ) -> list[dict[str, Any]]:
         where = ["j.relevant = 1"]
         args: list[Any] = []
@@ -392,6 +406,12 @@ class Database:
         if min_score is not None:
             where.append("j.score >= ?")
             args.append(min_score)
+        for word in (q or "").lower().split():  # every word must appear in the title, company or description
+            where.append("MATCHES_WORD(j.title || ' ' || j.company || ' ' || j.description, ?)")
+            args.append(_word_pattern(word))
+        if posted_within_days:
+            where.append("COALESCE(j.posted_at, j.first_seen_at) >= ?")
+            args.append(_shift(now, days=posted_within_days))
         direction = "ASC" if order == "asc" else "DESC"
         order_by = SORTS.get(sort, SORTS["score"]).format(o=direction)
         sql = (f"SELECT {LIST_COLUMNS}, {SOURCES_SUBQUERY} FROM jobs j WHERE {' AND '.join(where)} "

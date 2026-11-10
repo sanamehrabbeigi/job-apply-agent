@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     t = sub.add_parser("tailor", help="Tailor your resume to a job posting.")
-    t.add_argument("--resume", type=Path, help="Your master resume (.docx, .md or .txt). Default: the one set in the app.")
+    t.add_argument("--resume", type=Path, help="Your master resume (.docx, .pdf, .md or .txt). Default: the one set in the app.")
     job = t.add_mutually_exclusive_group(required=True)
     job.add_argument("--job-url", help="Link to the job posting (LinkedIn links of any kind work).")
     job.add_argument("--job-file", type=Path, help="Text file with the job posting.")

@@ -13,6 +13,8 @@ dependencies = [
     # Bundles the pandoc binary, so DOCX <-> Markdown works without a system install.
     "pypandoc-binary>=1.13",
     "python-docx>=1.1",
+    # Reads PDF resumes and profile documents (text PDFs; scanned ones are rejected with a clear message).
+    "pypdf>=4.0",
     # Local web app
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",

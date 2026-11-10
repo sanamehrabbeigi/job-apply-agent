@@ -20,13 +20,20 @@ async def fake_source(_ctx):
     ])
 
 
+async def fake_scorer(jobs, **kwargs):
+    """Stands in for Claude scoring: tests never call Claude."""
+    from job_apply_agent.search.scoring import JobScore, ScoreOutcome
+
+    return ScoreOutcome(scores=[JobScore(j["id"], 70, "ok", [], [], "fit") for j in jobs])
+
+
 @pytest.fixture
 def client(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("JOB_AGENT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("JOB_AGENT_OUTPUT_DIR", str(tmp_path / "output"))
     for key in ("JSEARCH_API_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY"):
         monkeypatch.delenv(key, raising=False)
-    rt = build_runtime(db=Database(":memory:"), sources={"greenhouse": fake_source})
+    rt = build_runtime(db=Database(":memory:"), sources={"greenhouse": fake_source}, scorer=fake_scorer)
     with TestClient(create_app(rt, start_scheduler=False), base_url="http://127.0.0.1") as c:
         c.rt = rt
         yield c
@@ -108,7 +115,7 @@ def test_profile_uploads(client, tmp_path: Path):
     r = client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane Doe\nSQL", "text/markdown")})
     assert r.status_code == 200 and r.json()["resume"]["exists"] is True
     assert r.json()["resume"]["name"] == "my_resume.md"
-    assert client.post("/api/profile/resume", files={"file": ("cv.pdf", b"%PDF", "application/pdf")}).status_code == 422
+    assert client.post("/api/profile/resume", files={"file": ("cv.rtf", b"{\\rtf1}", "application/rtf")}).status_code == 422
     doc = client.post("/api/profile/documents", files={"file": ("../skills.md", b"Looker", "text/markdown")})
     assert [d["name"] for d in doc.json()["documents"]] == ["skills.md"]  # path stripped
     assert client.post("/api/profile/documents", files={"file": ("answers.md", b"x", "text/markdown")}).status_code == 422
@@ -166,3 +173,31 @@ def test_status_reports_outdated_scores_and_rescore_is_accepted(client):
                      profile_hash=profile_hash("old resume", ""), now="2026-11-09T00:00:00+00:00")
     assert client.get("/api/status").json()["outdated_scores"] == 1
     assert client.post("/api/search", json={"sources": [], "rescore": True}).status_code == 202
+
+
+def test_pdf_resume_and_profile_document_uploads(client, tmp_path: Path):
+    from pdf_helpers import write_text_pdf
+
+    pdf = write_text_pdf(tmp_path / "cv.pdf", ["Jane Doe", "Data Analyst"]).read_bytes()
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane", "text/markdown")})
+    r = client.post("/api/profile/resume", files={"file": ("cv.pdf", pdf, "application/pdf")})
+    assert r.status_code == 200 and r.json()["resume"]["name"] == "my_resume.pdf"
+    assert client.get("/api/status").json()["resume"] is True
+    doc = client.post("/api/profile/documents", files={"file": ("history.pdf", pdf, "application/pdf")})
+    assert [d["name"] for d in doc.json()["documents"]] == ["history.pdf"]
+
+
+def test_jobs_api_keyword_and_date_filters(client):
+    client.post("/api/search", json={"sources": ["greenhouse"]})
+    wait_for_run(client)
+    body = client.get("/api/jobs", params={"q": "python", "posted_within_days": 7}).json()
+    assert [j["title"] for j in body["jobs"]] == ["Data Scientist"]
+    assert client.get("/api/jobs", params={"posted_within_days": 0}).status_code == 422
+
+
+def test_resume_upload_starts_scoring_unscored_jobs(client):
+    client.post("/api/search", json={"sources": ["greenhouse"]})
+    wait_for_run(client)
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane Doe\nSQL", "text/markdown")})
+    run = wait_for_run(client)
+    assert run["trigger"] == "resume" and list(run["sources"]) == ["scoring"] and run["scored"] == 2

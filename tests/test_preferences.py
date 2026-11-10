@@ -99,3 +99,9 @@ def test_claude_token_from_env_file_is_exported(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "already-set")
     assert envfile.export_claude_token(env) is False  # a real environment variable wins
     assert os.environ["CLAUDE_CODE_OAUTH_TOKEN"] == "already-set"
+
+
+def test_resume_path_finds_uploaded_pdf_resume(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("JOB_AGENT_DATA_DIR", str(tmp_path))
+    (tmp_path / "my_resume.pdf").write_bytes(b"%PDF")
+    assert resume_path(merge_defaults({})) == tmp_path / "my_resume.pdf"
