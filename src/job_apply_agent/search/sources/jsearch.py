@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from ...jobs import JobPosting, clean_inline
 from ...timeutil import iso_or_none, now_utc
 from ..base import SourceContext, SourceResult
-from ..http import HttpError
+from ..http import HttpError, RateLimited
 from ..quota import QuotaExceeded
 
 DEFAULT_URL = "https://jsearch.p.rapidapi.com/search"
@@ -60,7 +60,7 @@ async def fetch(ctx: SourceContext) -> SourceResult:
     date_posted = "today" if last is not None and now_utc() - last < timedelta(hours=36) else "3days"
 
     result = SourceResult()
-    calls = 0
+    calls = successes = 0
     for query in prefs.get("queries", []):
         try:
             ctx.quota.consume("jsearch")
@@ -72,8 +72,11 @@ async def fetch(ctx: SourceContext) -> SourceResult:
         calls += 1
         params = {"query": query, "country": "ca", "date_posted": date_posted, "num_pages": 1}
         try:
-            data = await ctx.http.get_json(base_url, params=params, headers=headers)
+            data = await ctx.http.get_json(base_url, params=params, headers=headers, retries=0)
             items = parse_jsearch(data)
+        except RateLimited:
+            result.warnings.append("JSearch says the rate limit or monthly quota is reached; stopped.")
+            break
         except HttpError as exc:
             if exc.status in (401, 403):
                 raise HttpError(exc.status, exc.url, "JSearch rejected the API key (check JSEARCH_API_KEY)") from exc
@@ -82,6 +85,11 @@ async def fetch(ctx: SourceContext) -> SourceResult:
         except ValueError as exc:
             result.warnings.append(f"“{query}”: {exc}")
             continue
-        result.postings.extend(to_posting(i) for i in items if i.get("job_id") and ctx.role_ok(i.get("job_title", "")))
+        successes += 1
+        result.postings.extend(
+            to_posting(i) for i in items if i.get("job_id") and ctx.role_ok(i.get("job_title") or "")
+        )
         ctx.progress(f"“{query}”: {len(items)} results")
+    if calls and not successes:
+        raise HttpError(None, base_url, "every JSearch request failed: " + "; ".join(result.warnings[:2]))
     return result

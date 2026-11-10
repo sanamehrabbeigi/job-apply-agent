@@ -121,3 +121,10 @@ async def test_gather_companies_isolates_failures():
 async def test_gather_companies_skips_when_none_configured():
     result = await gather_companies(make_ctx(), "ashby", None)
     assert result.skipped == "no companies configured"
+
+
+async def test_http_per_request_retries_zero_sends_once():
+    fetch = ScriptedFetch(Response(503, ""), Response(200, "{}"))
+    with pytest.raises(HttpError):
+        await Http(fetch, sleep=no_sleep, default_delay=0).get_json("https://api.example/x", retries=0)
+    assert len(fetch.calls) == 1

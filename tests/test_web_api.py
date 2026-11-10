@@ -27,7 +27,7 @@ def client(monkeypatch, tmp_path: Path):
     for key in ("JSEARCH_API_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY"):
         monkeypatch.delenv(key, raising=False)
     rt = build_runtime(db=Database(":memory:"), sources={"greenhouse": fake_source})
-    with TestClient(create_app(rt, start_scheduler=False)) as c:
+    with TestClient(create_app(rt, start_scheduler=False), base_url="http://127.0.0.1") as c:
         c.rt = rt
         yield c
 
@@ -139,3 +139,14 @@ def test_new_resume_upload_replaces_other_formats(client):
     client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane", "text/markdown")})
     client.post("/api/profile/resume", files={"file": ("cv.txt", b"Jane", "text/plain")})
     assert client.get("/api/profile").json()["resume"]["name"] == "my_resume.txt"
+
+
+def test_cross_site_writes_are_blocked(client):
+    evil = client.post("/api/search", json={}, headers={"Origin": "https://evil.example"})
+    assert evil.status_code == 403
+    r = client.post("/api/profile/resume", files={"file": ("cv.md", b"x", "text/markdown")},
+                    headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403 and client.get("/api/profile").json()["resume"]["exists"] is False
+    assert client.get("/api/status", headers={"Host": "evil.example"}).status_code == 400
+    dev_ui = client.post("/api/search", json={"sources": []}, headers={"Origin": "http://localhost:5173"})
+    assert dev_ui.status_code == 202

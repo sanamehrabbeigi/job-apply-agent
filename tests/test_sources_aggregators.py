@@ -58,8 +58,8 @@ async def test_jsearch_bad_key_raises_and_other_errors_warn():
         await jsearch.fetch(ctx)
     ctx = make_ctx(prefs={"sources": {"jsearch": {"queries": ["q1"]}}}, env={"JSEARCH_API_KEY": "k"},
                    routes={JS_URL: HttpError(500, JS_URL)})
-    result = await jsearch.fetch(ctx)
-    assert result.postings == [] and "q1" in result.warnings[0]
+    with pytest.raises(HttpError, match="every JSearch request failed"):  # all failed -> error, not success
+        await jsearch.fetch(ctx)
 
 
 AZ_URL = "https://api.adzuna.com/v1/api/jobs/ca/search/1"
@@ -93,3 +93,25 @@ def test_null_fields_do_not_break_parsing():
 
     q = adzuna.to_posting({"id": "1", "title": None, "description": None, "company": None, "location": None})
     assert q.title == "" and q.company == "" and q.location == ""
+
+
+async def test_quota_sources_never_retry_and_stop_at_rate_limit():
+    from job_apply_agent.search.http import RateLimited
+
+    prefs = {"sources": {"jsearch": {"queries": ["q1", "q2", "q3"], "budget": 10}}}
+    ok = make_ctx(prefs=prefs, env={"JSEARCH_API_KEY": "k"}, routes={JS_URL: {"data": [JOB]}})
+    await jsearch.fetch(ok)
+    assert ok.http.retries == [0, 0, 0]
+    limited = make_ctx(prefs=prefs, env={"JSEARCH_API_KEY": "k"}, routes={JS_URL: RateLimited(429, JS_URL)})
+    with pytest.raises(HttpError):
+        await jsearch.fetch(limited)
+    assert len(limited.http.calls) == 1  # stopped at the first 429
+
+
+async def test_adzuna_all_failed_is_an_error():
+    prefs = {"sources": {"adzuna": {"what": ["data analyst"], "where": ["Toronto"], "budget": 10}}}
+    ctx = make_ctx(prefs=prefs, env={"ADZUNA_APP_ID": "id", "ADZUNA_APP_KEY": "key"},
+                   routes={AZ_URL: HttpError(500, AZ_URL)})
+    with pytest.raises(HttpError, match="every Adzuna request failed"):
+        await SOURCES["adzuna"](ctx)
+    assert ctx.http.retries == [0]

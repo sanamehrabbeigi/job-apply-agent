@@ -74,6 +74,7 @@ async def fetch(ctx: SourceContext) -> SourceResult:
 
     result = SourceResult()
     cards: dict[str, dict[str, Any]] = {}
+    pages_ok = 0
     try:
         for keywords, location, work_type in searches:
             for page in range(int(prefs.get("max_pages", 2))):
@@ -81,6 +82,7 @@ async def fetch(ctx: SourceContext) -> SourceResult:
                 if work_type:
                     params["f_WT"] = work_type
                 found = parse_search(await ctx.http.get_text(SEARCH, params=params, retry_429=False))
+                pages_ok += 1
                 for card in found:
                     if work_type:
                         card["remote"] = True
@@ -102,6 +104,8 @@ async def fetch(ctx: SourceContext) -> SourceResult:
                 continue
             result.postings.append(_merge(parse_linkedin(page_html, VIEW.format(id=card["id"])), card))
     except RateLimited:
+        if pages_ok == 0:
+            raise  # nothing fetched: report an error so the next run widens its time window
         result.warnings.append("LinkedIn is limiting requests; stopped early. It will try again on the next run.")
         done = {p.external_id for p in result.postings}
         result.postings.extend(

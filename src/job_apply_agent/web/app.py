@@ -7,9 +7,11 @@ import json
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -49,8 +51,13 @@ class AnswersBody(BaseModel):
     answers: list[Answer]
 
 
-def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True) -> FastAPI:
+LOCAL_HOSTS = ["127.0.0.1", "localhost"]
+
+
+def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
+               allowed_hosts: list[str] | None = None) -> FastAPI:
     rt = runtime or build_runtime()
+    hosts = allowed_hosts or LOCAL_HOSTS
     background: set[asyncio.Task] = set()
 
     @asynccontextmanager
@@ -64,6 +71,17 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True) 
 
     app = FastAPI(title="job-apply-agent", lifespan=lifespan)
     app.state.runtime = rt
+    # Only this machine's browser tabs on this app may change anything: block other websites' requests
+    # (cross-site POSTs) and DNS-rebinding hosts.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+
+    @app.middleware("http")
+    async def same_origin_writes(request: Request, call_next):
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            if origin and urlsplit(origin).hostname not in hosts:
+                return JSONResponse({"detail": "Blocked a request from another website."}, status_code=403)
+        return await call_next(request)
 
     def now() -> str:
         return iso(rt.now())

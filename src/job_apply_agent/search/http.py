@@ -104,7 +104,10 @@ class Http:
         headers: dict[str, str] | None = None,
         json_body: Any = None,
         retry_429: bool = True,
+        retries: int | None = None,
     ) -> Response:
+        """``retries=0`` for quota-counted APIs: every attempt would be billed, so never retry them."""
+        attempts = self.retries if retries is None else retries
         if params:
             url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode(params, doseq=True)
         all_headers = {"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9", **(headers or {})}
@@ -114,19 +117,19 @@ class Http:
             all_headers.setdefault("Content-Type", "application/json")
             all_headers.setdefault("Accept", "application/json")
         host = urllib.parse.urlsplit(url).hostname or ""
-        for attempt in range(self.retries + 1):
+        for attempt in range(attempts + 1):
             await self._wait_turn(host)
             try:
                 response = await asyncio.to_thread(self._fetch, method, url, all_headers, body, self.timeout)
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                if attempt == self.retries:
+                if attempt == attempts:
                     raise HttpError(None, url, f"Couldn't reach {url}: {exc}") from exc
                 await self._sleep(self.backoff * 2**attempt)
                 continue
-            if response.status == 999 or (response.status == 429 and (not retry_429 or attempt == self.retries)):
+            if response.status == 999 or (response.status == 429 and (not retry_429 or attempt == attempts)):
                 raise RateLimited(response.status, url)
             if response.status == 429 or response.status >= 500:
-                if attempt == self.retries:
+                if attempt == attempts:
                     raise HttpError(response.status, url)
                 await self._sleep(self.backoff * 2**attempt)
                 continue
@@ -135,16 +138,22 @@ class Http:
             return response
         raise HttpError(None, url)  # unreachable
 
-    async def get_json(self, url: str, *, params=None, headers=None, retry_429: bool = True) -> Any:
-        response = await self.request("GET", url, params=params, headers=headers, retry_429=retry_429)
+    async def get_json(self, url: str, *, params=None, headers=None, retry_429: bool = True,
+                       retries: int | None = None) -> Any:
+        response = await self.request("GET", url, params=params, headers=headers, retry_429=retry_429,
+                                      retries=retries)
         return _decode(response, url)
 
-    async def post_json(self, url: str, body: Any, *, headers=None, retry_429: bool = True) -> Any:
-        response = await self.request("POST", url, headers=headers, json_body=body, retry_429=retry_429)
+    async def post_json(self, url: str, body: Any, *, headers=None, retry_429: bool = True,
+                        retries: int | None = None) -> Any:
+        response = await self.request("POST", url, headers=headers, json_body=body, retry_429=retry_429,
+                                      retries=retries)
         return _decode(response, url)
 
-    async def get_text(self, url: str, *, params=None, headers=None, retry_429: bool = True) -> str:
-        return (await self.request("GET", url, params=params, headers=headers, retry_429=retry_429)).text
+    async def get_text(self, url: str, *, params=None, headers=None, retry_429: bool = True,
+                       retries: int | None = None) -> str:
+        return (await self.request("GET", url, params=params, headers=headers, retry_429=retry_429,
+                                   retries=retries)).text
 
 
 def _decode(response: Response, url: str) -> Any:

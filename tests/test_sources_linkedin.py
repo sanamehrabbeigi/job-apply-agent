@@ -1,3 +1,4 @@
+import pytest
 from fakes import make_ctx
 from test_jobs import LINKEDIN_PAGE
 
@@ -59,10 +60,10 @@ async def test_linkedin_rate_limit_keeps_found_cards_as_partial():
     assert "limiting requests" in result.warnings[0]
 
 
-async def test_linkedin_blocked_immediately_is_a_warning():
+async def test_linkedin_blocked_immediately_is_an_error():
     ctx = make_ctx(routes={SEARCH: RateLimited(429, SEARCH)})
-    result = await linkedin.fetch(ctx)
-    assert result.postings == [] and result.warnings
+    with pytest.raises(RateLimited):  # nothing fetched -> not a success, so the next run widens its window
+        await linkedin.fetch(ctx)
 
 
 async def test_remote_canada_search_uses_work_type_filter():

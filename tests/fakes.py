@@ -18,6 +18,7 @@ class FakeHttp:
     def __init__(self, routes: dict[str, object] | None = None):
         self.routes = routes or {}
         self.calls: list[tuple] = []
+        self.retries: list[int | None] = []
 
     def _answer(self, url: str):
         for prefix, value in self.routes.items():
@@ -27,15 +28,18 @@ class FakeHttp:
                 return value
         raise HttpError(404, url)
 
-    async def get_json(self, url, *, params=None, headers=None, retry_429=True):
+    async def get_json(self, url, *, params=None, headers=None, retry_429=True, retries=None):
+        self.retries.append(retries)
         self.calls.append(("GET", url, params, headers))
         return self._answer(url)
 
-    async def post_json(self, url, body, *, headers=None, retry_429=True):
+    async def post_json(self, url, body, *, headers=None, retry_429=True, retries=None):
+        self.retries.append(retries)
         self.calls.append(("POST", url, body, headers))
         return self._answer(url)
 
-    async def get_text(self, url, *, params=None, headers=None, retry_429=True):
+    async def get_text(self, url, *, params=None, headers=None, retry_429=True, retries=None):
+        self.retries.append(retries)
         self.calls.append(("GET", url, params, headers))
         return self._answer(url)
 

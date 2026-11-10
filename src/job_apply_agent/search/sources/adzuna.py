@@ -7,7 +7,7 @@ from typing import Any
 from ...jobs import JobPosting, clean_inline
 from ...timeutil import iso_or_none
 from ..base import SourceContext, SourceResult
-from ..http import HttpError
+from ..http import HttpError, RateLimited
 from ..quota import QuotaExceeded
 
 URL = "https://api.adzuna.com/v1/api/jobs/ca/search/1"
@@ -36,30 +36,37 @@ async def fetch(ctx: SourceContext) -> SourceResult:
     if not (app_id and app_key):
         return SourceResult(skipped="no API key (add ADZUNA_APP_ID and ADZUNA_APP_KEY to data/.env)")
     result = SourceResult()
-    calls = 0
-    for what in prefs.get("what", []):
-        for where in prefs.get("where", []):
-            try:
-                ctx.quota.consume("adzuna")
-            except QuotaExceeded as exc:
-                if calls == 0:
-                    return SourceResult(skipped=str(exc))
-                result.warnings.append(str(exc))
-                return result
-            calls += 1
-            params = {
-                "app_id": app_id, "app_key": app_key, "what": what, "where": where,
-                "max_days_old": prefs.get("max_days_old", 3), "results_per_page": 50,
-                "sort_by": "date", "content-type": "application/json",
-            }
-            try:
-                data = await ctx.http.get_json(URL, params=params)
-            except HttpError as exc:
-                if exc.status in (401, 403):
-                    raise HttpError(exc.status, exc.url, "Adzuna rejected the app ID/key") from exc
-                result.warnings.append(f"{what} in {where}: {exc}")
-                continue
-            items = data.get("results") or []
-            result.postings.extend(to_posting(i) for i in items if i.get("id") and ctx.role_ok(clean_inline(i.get("title") or "")))
-            ctx.progress(f"{what} in {where}: {len(items)} results")
+    calls = successes = 0
+    for what, where in [(w, p) for w in prefs.get("what", []) for p in prefs.get("where", [])]:
+        try:
+            ctx.quota.consume("adzuna")
+        except QuotaExceeded as exc:
+            if calls == 0:
+                return SourceResult(skipped=str(exc))
+            result.warnings.append(str(exc))
+            break
+        calls += 1
+        params = {
+            "app_id": app_id, "app_key": app_key, "what": what, "where": where,
+            "max_days_old": prefs.get("max_days_old", 3), "results_per_page": 50,
+            "sort_by": "date", "content-type": "application/json",
+        }
+        try:
+            data = await ctx.http.get_json(URL, params=params, retries=0)
+        except RateLimited:
+            result.warnings.append("Adzuna says the rate limit is reached; stopped.")
+            break
+        except HttpError as exc:
+            if exc.status in (401, 403):
+                raise HttpError(exc.status, URL, "Adzuna rejected the app ID/key") from exc
+            result.warnings.append(f"{what} in {where}: HTTP {exc.status or 'error'}")
+            continue
+        successes += 1
+        items = data.get("results") or []
+        result.postings.extend(
+            to_posting(i) for i in items if i.get("id") and ctx.role_ok(clean_inline(i.get("title") or ""))
+        )
+        ctx.progress(f"{what} in {where}: {len(items)} results")
+    if calls and not successes:
+        raise HttpError(None, URL, "every Adzuna request failed: " + "; ".join(result.warnings[:2]))
     return result

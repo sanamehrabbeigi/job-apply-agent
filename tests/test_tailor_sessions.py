@@ -143,7 +143,7 @@ def test_tailor_routes_and_file_download(env):
     rt.tailor.flow = fake_flow(tmp_path, asks)
     rt.tailor.answer_timeout = 5
     job_id = add_job(rt.db)
-    with TestClient(create_app(rt, start_scheduler=False)) as client:
+    with TestClient(create_app(rt, start_scheduler=False), base_url="http://127.0.0.1") as client:
         started = client.post(f"/api/jobs/{job_id}/tailor")
         assert started.status_code == 202
         sid = started.json()["id"]
