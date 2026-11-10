@@ -1,7 +1,7 @@
 # Design: local web app + automatic job search
 
 Date: 2026-11-09
-Status: approved in conversation, pending written-spec review
+Status: approved
 
 ## 1. Goal
 
@@ -139,7 +139,7 @@ career APIs return (engineering, sales, design...).
 
 - **Role:** the normalized title contains one of the role terms (default: `data analyst`,
   `data scientist`, `data engineer`, `analytics engineer`, `business intelligence`,
-  `bi analyst`, `bi developer`, `analytics`, `machine learning engineer`, `product analyst`,
+  `bi analyst`, `bi developer`, `analytics`, `product analyst`,
   `reporting analyst`, `insights analyst`). Editable in Settings.
 - **Location:** matches Toronto/GTA (Toronto, Mississauga, Markham, Vaughan, Brampton,
   Oakville, Richmond Hill, North York, Etobicoke, Scarborough, "Greater Toronto"), Ottawa
