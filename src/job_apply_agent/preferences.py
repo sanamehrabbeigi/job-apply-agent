@@ -153,5 +153,12 @@ def save_preferences(prefs: dict[str, Any], path: Path | None = None) -> None:
 
 
 def resume_path(prefs: dict[str, Any]) -> Path:
+    """The custom path if one is set, else data/my_resume.docx|.md|.txt (whichever exists)."""
     custom = (prefs.get("resume_path") or "").strip()
-    return Path(custom) if custom else paths.data_dir() / "my_resume.docx"
+    if custom:
+        return Path(custom)
+    for suffix in (".docx", ".md", ".txt"):
+        candidate = paths.data_dir() / f"my_resume{suffix}"
+        if candidate.is_file():
+            return candidate
+    return paths.data_dir() / "my_resume.docx"

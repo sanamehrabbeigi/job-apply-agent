@@ -80,3 +80,9 @@ def test_env_file_and_environment(monkeypatch, tmp_path: Path):
 
 def test_preferences_module_exposes_source_names():
     assert preferences.SOURCE_NAMES == ("greenhouse", "lever", "ashby", "workday", "jsearch", "adzuna", "linkedin")
+
+
+def test_resume_path_finds_uploaded_markdown_resume(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("JOB_AGENT_DATA_DIR", str(tmp_path))
+    (tmp_path / "my_resume.md").write_text("# Me", encoding="utf-8")
+    assert resume_path(merge_defaults({})) == tmp_path / "my_resume.md"

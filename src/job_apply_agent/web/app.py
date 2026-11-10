@@ -211,9 +211,12 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True) 
         target = paths.data_dir() / f"my_resume{suffix}"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(await file.read())
+        for other in RESUME_SUFFIXES - {suffix}:
+            (paths.data_dir() / f"my_resume{other}").unlink(missing_ok=True)
         prefs = load_preferences()
-        prefs["resume_path"] = str(target)
-        save_preferences(prefs)
+        if prefs.get("resume_path"):  # a custom path would hide the upload; go back to the default location
+            prefs["resume_path"] = ""
+            save_preferences(prefs)
         return profile_info()
 
     @app.post("/api/profile/documents")

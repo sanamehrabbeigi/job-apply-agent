@@ -126,3 +126,16 @@ def test_status_without_resume(client):
 def test_root_without_built_ui_or_with(client):
     r = client.get("/")
     assert r.status_code == 200
+
+
+def test_saving_stale_settings_after_resume_upload_keeps_the_resume(client):
+    stale = client.get("/api/preferences").json()  # loaded before the upload, like the Settings page
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane Doe\nSQL", "text/markdown")})
+    client.put("/api/preferences", json=stale)
+    assert client.get("/api/status").json()["resume"] is True
+
+
+def test_new_resume_upload_replaces_other_formats(client):
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane", "text/markdown")})
+    client.post("/api/profile/resume", files={"file": ("cv.txt", b"Jane", "text/plain")})
+    assert client.get("/api/profile").json()["resume"]["name"] == "my_resume.txt"
