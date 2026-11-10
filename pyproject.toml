@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "job-apply-agent"
-version = "0.1.0"
-description = "A personal AI agent (Claude Agent SDK) that helps you apply to jobs. Phase 1: tailor your resume to a job posting."
+version = "0.2.0"
+description = "A personal AI agent (Claude Agent SDK) that finds jobs that fit you and tailors your resume to them."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -13,12 +13,17 @@ dependencies = [
     # Bundles the pandoc binary, so DOCX <-> Markdown works without a system install.
     "pypandoc-binary>=1.13",
     "python-docx>=1.1",
+    # Local web app
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 # DOCX -> PDF through Microsoft Word (Windows/macOS) when LibreOffice is not installed.
 word = ["docx2pdf>=0.1.8"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27", "ruff>=0.6"]
 
 [project.scripts]
 job-agent = "job_apply_agent.cli:main"
@@ -30,3 +35,12 @@ packages = ["src/job_apply_agent"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["frontend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

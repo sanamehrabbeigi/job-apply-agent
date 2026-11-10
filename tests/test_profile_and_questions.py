@@ -1,10 +1,10 @@
 from pathlib import Path
 
 from docx import Document
+from test_tailor import STRUCTURED, make_result
 
 from job_apply_agent import cli, jobs
 from job_apply_agent.career_profile import load_answers, load_profile, save_answers
-from test_tailor import STRUCTURED, make_result
 
 
 def test_load_profile_reads_folder_and_extra_files(tmp_path: Path):
