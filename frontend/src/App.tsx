@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { JobsPage } from "./components/JobsPage";
 import { SearchDrawer } from "./components/SearchDrawer";
+import { SettingsPage } from "./components/SettingsPage";
 import { SetupBanners, TopBar, type Page } from "./components/TopBar";
 import { useEvents } from "./hooks/useEvents";
 import { applyRunEvent, type LiveRun } from "./lib/runs";
@@ -53,7 +54,16 @@ export default function App() {
       )}
       {status && <SetupBanners status={status} onOpenSettings={() => setPage("settings")} />}
       <main>
-        {page === "jobs" ? <JobsPage refreshKey={refreshKey} /> : <p className="muted">Settings arrive in the next step.</p>}
+        {page === "jobs" ? (
+          <JobsPage refreshKey={refreshKey} />
+        ) : (
+          <SettingsPage
+            onSaved={() => {
+              loadStatus();
+              setRefreshKey((k) => k + 1);
+            }}
+          />
+        )}
       </main>
       {drawerOpen && <SearchDrawer live={live} onClose={() => setDrawerOpen(false)} />}
     </div>
