@@ -55,10 +55,20 @@ class TailorManager:
         self.fetch = fetch
         self.sessions: dict[str, TailorSession] = {}
 
+    def latest_for_job(self, job_id: int) -> TailorSession | None:
+        for session in reversed(self.sessions.values()):
+            if session.job_id == job_id:
+                return session
+        return None
+
     def start(self, job_id: int) -> TailorSession:
+        """Start tailoring for a job, or return the run already in progress for it."""
         job = self.db.get_job(job_id)
         if job is None:
             raise KeyError(job_id)
+        active = self.latest_for_job(job_id)
+        if active is not None and active.state in ("running", "waiting"):
+            return active
         prefs = self.load_prefs()
         resume = resume_path(prefs)
         if not resume.is_file():

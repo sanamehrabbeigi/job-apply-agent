@@ -2,10 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { api, fileUrl } from "../api";
 import type { TailorState } from "../types";
 
-export function TailorPanel({ jobId, onDone }: { jobId: number; onDone: () => void }) {
+interface TailorPanelProps {
+  jobId: number;
+  previousFiles?: string[];
+  onDone: () => void;
+}
+
+export function TailorPanel({ jobId, previousFiles = [], onDone }: TailorPanelProps) {
   const [state, setState] = useState<TailorState | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  // Reconnect to a run started earlier (e.g. before this panel was closed or the page reloaded).
+  useEffect(() => {
+    api.jobTailor(jobId).then((existing) => existing && setState(existing)).catch(() => undefined);
+  }, [jobId]);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const sessionId = state?.id;
@@ -28,10 +40,13 @@ export function TailorPanel({ jobId, onDone }: { jobId: number; onDone: () => vo
   const start = async () => {
     setError(null);
     setAnswers({});
+    setStarting(true);
     try {
       setState(await api.startTailor(jobId));
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -50,8 +65,22 @@ export function TailorPanel({ jobId, onDone }: { jobId: number; onDone: () => vo
     <section className="tailor" aria-live="polite">
       <h3>Tailored resume</h3>
       {error && <p className="error" role="alert">{error}</p>}
+      {!state && previousFiles.length > 0 && (
+        <div>
+          <p className="muted">Tailored earlier:</p>
+          <ul>
+            {previousFiles.map((file) => (
+              <li key={file}>
+                <a href={fileUrl(file)} download>{file.split("/").pop()}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!state && (
-        <button className="primary" onClick={() => void start()}>Tailor my resume for this job</button>
+        <button className="primary" disabled={starting} onClick={() => void start()}>
+          {starting ? "Starting…" : previousFiles.length > 0 ? "Tailor again" : "Tailor my resume for this job"}
+        </button>
       )}
       {state?.state === "running" && (
         <div>
@@ -108,7 +137,7 @@ export function TailorPanel({ jobId, onDone }: { jobId: number; onDone: () => vo
             <p key={w} className="muted">{w}</p>
           ))}
           <p className="muted">Review every line before sending: it must be true and sound like you.</p>
-          <button onClick={() => void start()}>Tailor again</button>
+          <button disabled={starting} onClick={() => void start()}>Tailor again</button>
         </div>
       )}
       {state?.state === "error" && (

@@ -70,6 +70,12 @@ export const api = {
   status: () => request<Status>("/api/status"),
   startTailor: (jobId: number) => request<TailorState>(`/api/jobs/${jobId}/tailor`, { method: "POST" }),
   tailor: (id: string) => request<TailorState>(`/api/tailor/${id}`),
+  /** The tailoring run for a job since the app started, or null. */
+  jobTailor: (jobId: number) =>
+    request<TailorState>(`/api/jobs/${jobId}/tailor`).catch((e: unknown) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }),
   answer: (id: string, answers: { question: string; answer: string }[]) =>
     request<TailorState>(`/api/tailor/${id}/answers`, sendJson("POST", { answers })),
   preferences: () => request<Preferences>("/api/preferences"),

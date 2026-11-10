@@ -165,3 +165,39 @@ def test_tailor_routes_and_file_download(env):
         assert client.get("/api/files/../data/my_resume.md").status_code == 404
         assert client.get("/api/tailor/nope").status_code == 404
         assert client.post("/api/jobs/999/tailor").status_code == 404
+
+
+async def test_starting_again_while_running_returns_the_same_session(env):
+    tmp_path, prefs = env
+    db = Database(":memory:")
+    job_id = add_job(db)
+    manager = TailorManager(db, EventBus(), load_prefs=lambda: prefs, answer_timeout=5,
+                            flow=fake_flow(tmp_path, []))
+    first = manager.start(job_id)
+    await asyncio.sleep(0)
+    assert manager.start(job_id).id == first.id
+    assert manager.latest_for_job(job_id).id == first.id and manager.latest_for_job(999) is None
+    manager.answer(first.id, [])
+    await manager.wait(first.id)
+
+
+def test_reopening_a_job_finds_its_session_and_files(env):
+    tmp_path, prefs = env
+    from job_apply_agent.preferences import save_preferences
+
+    save_preferences(prefs)
+    rt = build_runtime(db=Database(":memory:"), sources={})
+    rt.tailor.flow = fake_flow(tmp_path, [])
+    rt.tailor.answer_timeout = 0.05
+    job_id = add_job(rt.db)
+    with TestClient(create_app(rt, start_scheduler=False), base_url="http://127.0.0.1") as client:
+        assert client.get(f"/api/jobs/{job_id}/tailor").status_code == 404
+        sid = client.post(f"/api/jobs/{job_id}/tailor").json()["id"]
+        for _ in range(100):
+            state = client.get(f"/api/jobs/{job_id}/tailor").json()
+            if state["state"] == "done":
+                break
+            time.sleep(0.02)
+        assert state["id"] == sid and state["state"] == "done"
+        detail = client.get(f"/api/jobs/{job_id}").json()
+        assert detail["tailored_files"] == ["2026-11-09_Acme_Data-Analyst/Alex_Resume_Acme.md"]

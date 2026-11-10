@@ -110,11 +110,21 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
                                hide_done=hide_done)
         return {"jobs": jobs, "counts": rt.db.counts(now())}
 
+    def tailored_files(folder: str | None) -> list[str]:
+        if not folder:
+            return []
+        root = paths.output_dir().resolve()
+        target = (root / folder).resolve()
+        if root not in target.parents or not target.is_dir():
+            return []
+        return sorted(f"{folder}/{p.name}" for p in target.iterdir() if p.is_file())
+
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: int) -> dict[str, Any]:
         job = rt.db.get_job(job_id)
         if job is None:
             raise HTTPException(404, "Job not found.")
+        job["tailored_files"] = tailored_files(job.get("tailored_folder"))
         return job
 
     @app.patch("/api/jobs/{job_id}")
@@ -287,6 +297,13 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
             raise HTTPException(404, "Job not found.") from None
         except MissingResume as exc:
             raise HTTPException(409, str(exc)) from None
+        return session.to_dict()
+
+    @app.get("/api/jobs/{job_id}/tailor")
+    def get_job_tailor(job_id: int) -> dict[str, Any]:
+        session = rt.tailor.latest_for_job(job_id)
+        if session is None:
+            raise HTTPException(404, "No tailoring run for this job since the app started.")
         return session.to_dict()
 
     @app.get("/api/tailor/{session_id}")

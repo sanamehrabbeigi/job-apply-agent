@@ -39,6 +39,7 @@ export interface JobDetail extends JobRow {
   notes: string;
   employment_type: string;
   links: JobLink[];
+  tailored_files?: string[];
 }
 
 export interface Counts {

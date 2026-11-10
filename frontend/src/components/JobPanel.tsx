@@ -108,7 +108,7 @@ export function JobPanel({ jobId, onClose, onChanged }: JobPanelProps) {
         />
       </label>
 
-      <TailorPanel jobId={job.id} onDone={onChanged} />
+      <TailorPanel jobId={job.id} previousFiles={job.tailored_files} onDone={onChanged} />
 
       <h3>
         Description
