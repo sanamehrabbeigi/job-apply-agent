@@ -150,3 +150,19 @@ def test_cross_site_writes_are_blocked(client):
     assert client.get("/api/status", headers={"Host": "evil.example"}).status_code == 400
     dev_ui = client.post("/api/search", json={"sources": []}, headers={"Origin": "http://localhost:5173"})
     assert dev_ui.status_code == 202
+
+
+def test_status_reports_outdated_scores_and_rescore_is_accepted(client):
+    client.post("/api/profile/resume", files={"file": ("cv.md", b"# Jane v1", "text/markdown")})
+    rt = client.rt
+    from job_apply_agent.search.scoring import profile_hash
+
+    job_id, _ = rt.db.upsert_posting(
+        JobPosting(url="https://gh/7", title="Data Analyst", company="Acme", location="Toronto", source="lever",
+                   external_id="7", description="x" * 400),
+        dedupe_key="k7", canonical_url="gh/7", relevant=True, location_label="Toronto/GTA", run_id=None,
+        now=time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()))
+    rt.db.save_score(job_id, score=50, summary="", reasons=[], gaps=[], seniority_fit="fit", model="m",
+                     profile_hash=profile_hash("old resume", ""), now="2026-11-09T00:00:00+00:00")
+    assert client.get("/api/status").json()["outdated_scores"] == 1
+    assert client.post("/api/search", json={"sources": [], "rescore": True}).status_code == 202

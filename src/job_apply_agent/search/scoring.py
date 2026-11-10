@@ -84,8 +84,12 @@ class ScoreOutcome:
     auth_failed: bool = False
 
 
-def profile_hash(resume: str, profile: str, answers: str) -> str:
-    return hashlib.sha256("\x1e".join((resume, profile, answers)).encode("utf-8")).hexdigest()[:16]
+def profile_hash(resume: str, profile: str) -> str:
+    """Identifies the version of the candidate's documents a score was made from.
+
+    Saved answers are left out on purpose: they grow every time she answers a tailoring question,
+    and re-scoring every job for each answer would waste usage. They are still sent when scoring."""
+    return hashlib.sha256("\x1e".join((resume, profile)).encode("utf-8")).hexdigest()[:16]
 
 
 def trim_description(text: str, limit: int = MAX_DESCRIPTION_CHARS) -> str:

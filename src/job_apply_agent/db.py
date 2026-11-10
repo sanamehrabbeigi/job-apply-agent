@@ -323,13 +323,25 @@ class Database:
             c.commit()
             return cur.rowcount
 
-    def jobs_to_score(self, profile_hash: str) -> list[dict[str, Any]]:
+    def jobs_to_score(self, profile_hash: str, *, now: str, include_outdated: bool = False) -> list[dict[str, Any]]:
+        """Visible jobs without a score; with ``include_outdated``, also those scored against older documents."""
+        outdated = "OR profile_hash IS NOT ?" if include_outdated else ""
+        args: tuple = (_shift(now, days=STALE_DAYS), profile_hash) if include_outdated else (_shift(now, days=STALE_DAYS),)
         rows = self._all(
             "SELECT id, title, company, location, description FROM jobs WHERE relevant = 1 AND closed = 0 "
-            "AND (score IS NULL OR profile_hash IS NOT ?) ORDER BY first_seen_at DESC, id DESC",
-            (profile_hash,),
+            f"AND last_seen_at >= ? AND (score IS NULL {outdated}) ORDER BY first_seen_at DESC, id DESC",
+            args,
         )
         return [dict(r) for r in rows]
+
+    def count_outdated(self, profile_hash: str, *, now: str) -> int:
+        """Visible jobs whose score was computed from an older resume/profile."""
+        row = self._one(
+            "SELECT COUNT(*) AS n FROM jobs WHERE relevant = 1 AND closed = 0 AND last_seen_at >= ? "
+            "AND score IS NOT NULL AND profile_hash IS NOT ?",
+            (_shift(now, days=STALE_DAYS), profile_hash),
+        )
+        return int(row["n"])
 
     def save_score(self, job_id: int, *, score: int, summary: str, reasons: list[str], gaps: list[str],
                    seniority_fit: str, model: str, profile_hash: str, now: str) -> None:

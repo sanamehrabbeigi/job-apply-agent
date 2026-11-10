@@ -33,11 +33,11 @@ export default function App() {
     ),
   );
 
-  const startSearch = async () => {
+  const startSearch = async (sources?: string[], rescore = false) => {
     setError(null);
     setDrawerOpen(true);
     try {
-      await api.startSearch();
+      await api.startSearch(sources, rescore);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -52,7 +52,15 @@ export default function App() {
           <button onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
-      {status && <SetupBanners status={status} onOpenSettings={() => setPage("settings")} />}
+      {status && (
+        <SetupBanners
+          status={status}
+          onOpenSettings={() => setPage("settings")}
+          onRescore={() => {
+            if (window.confirm(`Re-score ${status.outdated_scores} job(s) with Claude now?`)) void startSearch([], true);
+          }}
+        />
+      )}
       <main>
         {page === "jobs" ? (
           <JobsPage refreshKey={refreshKey} />

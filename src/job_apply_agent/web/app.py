@@ -19,10 +19,11 @@ from .. import paths
 from ..documents import _find_soffice
 from ..envfile import load_env
 from ..preferences import load_preferences, merge_defaults, resume_path, save_preferences, validate_preferences
-from ..runtime import Runtime, build_runtime, default_http
+from ..runtime import Runtime, build_runtime, default_http, load_candidate_docs
 from ..search.companies import load_companies, save_companies, test_company, validate_companies
 from ..search.pipeline import refilter_jobs
 from ..search.quota import QuotaGuard, budgets_from_prefs
+from ..search.scoring import profile_hash
 from ..tailor import auth_warning
 from ..tailor_sessions import MissingResume, NotWaiting
 from ..timeutil import iso
@@ -40,6 +41,7 @@ class JobUpdate(BaseModel):
 
 class SearchRequest(BaseModel):
     sources: list[str] | None = None
+    rescore: bool = False
 
 
 class Answer(BaseModel):
@@ -142,7 +144,8 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         if rt.runner.running:
             raise HTTPException(409, "A search is already running.")
         sources = body.sources if body else None
-        keep(asyncio.create_task(rt.runner.run(trigger="manual", sources=sources)))
+        rescore = body.rescore if body else False
+        keep(asyncio.create_task(rt.runner.run(trigger="manual", sources=sources, rescore=rescore)))
         await asyncio.sleep(0)  # let the run take the lock before we answer
         return {"started": True}
 
@@ -274,7 +277,10 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True,
         prefs = load_preferences()
         env = load_env()
         runs = rt.db.list_runs(1)
+        docs = load_candidate_docs()
+        outdated = rt.db.count_outdated(profile_hash(docs.resume, docs.profile), now=now()) if docs else 0
         return {
+            "outdated_scores": outdated,
             "resume": resume_path(prefs).is_file(),
             "auth_warning": auth_warning(),
             "keys": {"jsearch": bool(env.get("JSEARCH_API_KEY")),

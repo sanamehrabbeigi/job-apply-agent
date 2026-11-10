@@ -69,11 +69,13 @@ class SearchRunner:
     def running(self) -> bool:
         return self._lock.locked()
 
-    async def run(self, *, trigger: str, sources: list[str] | None = None, score: bool = True) -> int:
+    async def run(self, *, trigger: str, sources: list[str] | None = None, score: bool = True,
+                  rescore: bool = False) -> int:
+        """``rescore=True`` (the user confirmed) also re-scores jobs scored against an older resume/profile."""
         if self._lock.locked():
             raise SearchAlreadyRunning("A search is already running.")
         async with self._lock:
-            return await self._run(trigger, sources, score)
+            return await self._run(trigger, sources, score, rescore)
 
     def _names(self, prefs: dict[str, Any], requested: list[str] | None) -> list[str]:
         if requested is None:
@@ -83,7 +85,7 @@ class SearchRunner:
             raise ValueError(f"Unknown source(s): {', '.join(unknown)}. Choose from {', '.join(SOURCE_NAMES)}.")
         return [n for n in requested if n in self.sources]
 
-    async def _run(self, trigger: str, requested: list[str] | None, score: bool) -> int:
+    async def _run(self, trigger: str, requested: list[str] | None, score: bool, rescore: bool) -> int:
         prefs = self.load_prefs()
         names = self._names(prefs, requested)
         run_id = self.db.start_run(trigger, iso(self.now_fn()))
@@ -96,7 +98,7 @@ class SearchRunner:
                 ctx = self._context(prefs, run_id)
                 await asyncio.gather(*(self._run_source(name, ctx, prefs, run_id, stats) for name in names))
             if score:
-                stats["scoring"] = await self._score(prefs, run_id)
+                stats["scoring"] = await self._score(prefs, run_id, rescore)
             else:
                 stats["scoring"] = {"status": "skipped", "scored": 0, "message": "Scoring was turned off for this run."}
             scored = int(stats["scoring"].get("scored", 0))
@@ -165,13 +167,13 @@ class SearchRunner:
             self.db.mark_source_attempt(name, now, success=success)
         self.events.publish({"type": "run.source", "run_id": run_id, "source": name, "stat": stats[name]})
 
-    async def _score(self, prefs: dict[str, Any], run_id: int) -> dict[str, Any]:
+    async def _score(self, prefs: dict[str, Any], run_id: int, rescore: bool = False) -> dict[str, Any]:
         docs = self.load_docs()
         if docs is None:
             return {"status": "skipped", "scored": 0,
                     "message": "No resume yet, so jobs were not scored. Add it in Settings."}
-        phash = profile_hash(docs.resume, docs.profile, docs.answers)
-        pending = self.db.jobs_to_score(phash)
+        phash = profile_hash(docs.resume, docs.profile)
+        pending = self.db.jobs_to_score(phash, now=iso(self.now_fn()), include_outdated=rescore)
         if not pending:
             return {"status": "ok", "scored": 0, "failed": 0, "message": "Nothing new to score."}
         model = prefs["models"]["scoring"]

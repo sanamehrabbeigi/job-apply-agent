@@ -106,8 +106,10 @@ def test_sorting_filters_and_scores(db):
     assert [j["company"] for j in db.list_jobs(now=T, sort="company", order="asc")] == ["Acme", "Beta", "Zed"]
     assert [j["title"] for j in db.list_jobs(now=T, role="engineer")] == ["Data Engineer"]
     assert [j["score"] for j in db.list_jobs(now=T, min_score=70)] == [90]
-    assert {j["id"] for j in db.jobs_to_score("h1")} == {3}
-    assert len(db.jobs_to_score("h2")) == 3  # resume changed -> everything re-scored
+    assert {j["id"] for j in db.jobs_to_score("h1", now=T)} == {3}
+    assert {j["id"] for j in db.jobs_to_score("h2", now=T)} == {3}  # older scores kept unless asked
+    assert len(db.jobs_to_score("h2", now=T, include_outdated=True)) == 3
+    assert db.count_outdated("h2", now=T) == 2 and db.count_outdated("h1", now=T) == 0
     assert db.get_job(a)["reasons"] == ["SQL"]
 
 
@@ -122,7 +124,7 @@ def test_update_job_and_hide_done(db):
 
 def test_irrelevant_jobs_never_listed_or_scored(db):
     add(db, posting(title="Sales Rep"), relevant=False)
-    assert db.list_jobs(now=T) == [] and db.jobs_to_score("h") == []
+    assert db.list_jobs(now=T) == [] and db.jobs_to_score("h", now=T) == []
 
 
 def test_runs_quota_and_source_state(db):
@@ -161,7 +163,7 @@ def test_full_description_arriving_later_clears_score(db):
                   profile_hash="h", now=T)
     add(db, posting(source="linkedin", external_id="li1", description="Full text " * 50))
     assert db.get_job(job_id)["score"] is None
-    assert [j["id"] for j in db.jobs_to_score("h")] == [job_id]
+    assert [j["id"] for j in db.jobs_to_score("h", now=T)] == [job_id]
 
 
 def test_date_only_posting_from_yesterday_found_today_is_new(db):
@@ -171,3 +173,8 @@ def test_date_only_posting_from_yesterday_found_today_is_new(db):
     add(db, posting(posted_at=iso(datetime(2026, 11, 8, tzinfo=timezone.utc))), run_id=second,
         now=iso(datetime(2026, 11, 9, 11, 0, tzinfo=timezone.utc)))
     assert len(db.list_jobs(now=T, tab="new")) == 1
+
+
+def test_stale_jobs_are_never_scored(db):
+    add(db, posting(), now=iso(NOW - timedelta(days=30)))
+    assert db.jobs_to_score("h", now=T) == []

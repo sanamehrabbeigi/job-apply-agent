@@ -64,8 +64,8 @@ export const api = {
   job: (id: number) => request<JobDetail>(`/api/jobs/${id}`),
   updateJob: (id: number, patch: { status?: JobStatus; notes?: string }) =>
     request<JobDetail>(`/api/jobs/${id}`, sendJson("PATCH", patch)),
-  startSearch: (sources?: string[]) =>
-    request<{ started: boolean }>("/api/search", sendJson("POST", { sources: sources ?? null })),
+  startSearch: (sources?: string[], rescore = false) =>
+    request<{ started: boolean }>("/api/search", sendJson("POST", { sources: sources ?? null, rescore })),
   runs: (limit = 10) => request<Run[]>(`/api/runs?limit=${limit}`),
   status: () => request<Status>("/api/status"),
   startTailor: (jobId: number) => request<TailorState>(`/api/jobs/${jobId}/tailor`, { method: "POST" }),

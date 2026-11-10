@@ -35,11 +35,11 @@ class ScoringQuery:
         return gen()
 
 
-def test_profile_hash_changes_with_any_document():
-    base = profile_hash("resume", "profile", "answers")
+def test_profile_hash_tracks_resume_and_profile_but_not_answers():
+    base = profile_hash("resume", "profile")
     assert len(base) == 16
-    assert base != profile_hash("resume2", "profile", "answers")
-    assert base != profile_hash("resume", "profile", "answers2")
+    assert base != profile_hash("resume2", "profile")
+    assert base != profile_hash("resume", "profile2")
 
 
 def test_trim_description_cuts_late_boilerplate_only():

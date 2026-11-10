@@ -97,7 +97,9 @@ async def test_resume_change_rescores_everything(db):
                           scorer=scorer, sources={"greenhouse": source()}, now_fn=lambda: NOW)
     await runner.run(trigger="manual")
     docs["value"] = CandidateDocs("v2")
-    await runner.run(trigger="manual", sources=[])  # score-only run
+    await runner.run(trigger="schedule")  # a normal run doesn't silently re-score everything
+    assert len(scorer.calls) == 1
+    await runner.run(trigger="manual", sources=[], rescore=True)  # the user confirmed
     assert len(scorer.calls) == 2 and len(scorer.calls[1][0]) == 1
 
 
@@ -243,3 +245,15 @@ async def test_claude_login_failure_is_reported(db):
     run = db.get_run(await make_runner(db, {"greenhouse": source()}, scorer=scorer).run(trigger="manual"))
     assert run["sources"]["scoring"]["status"] == "auth"
     assert "login" in run["sources"]["scoring"]["message"]
+
+
+async def test_answers_alone_do_not_trigger_rescoring(db):
+    scorer = FakeScorer()
+    docs = {"value": CandidateDocs("resume", "profile", "answers v1")}
+    runner = SearchRunner(db, events=EventBus(), load_prefs=lambda: merge_defaults({}), load_companies=lambda: [],
+                          load_env=lambda: {}, load_docs=lambda: docs["value"], http_factory=FakeHttp,
+                          scorer=scorer, sources={"greenhouse": source()}, now_fn=lambda: NOW)
+    await runner.run(trigger="manual")
+    docs["value"] = CandidateDocs("resume", "profile", "answers v2")
+    await runner.run(trigger="manual", sources=[], rescore=True)
+    assert len(scorer.calls) == 1

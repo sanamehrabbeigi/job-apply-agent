@@ -145,6 +145,7 @@ export interface Status {
   schedule_enabled: boolean;
   last_run: Run | null;
   counts: Counts;
+  outdated_scores: number;
 }
 
 export interface AppEvent {

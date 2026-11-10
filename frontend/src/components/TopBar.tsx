@@ -42,7 +42,13 @@ export function TopBar({ page, onNavigate, status, live, onSearch, onShowRuns }:
   );
 }
 
-export function SetupBanners({ status, onOpenSettings }: { status: Status; onOpenSettings: () => void }) {
+interface SetupBannersProps {
+  status: Status;
+  onOpenSettings: () => void;
+  onRescore: () => void;
+}
+
+export function SetupBanners({ status, onOpenSettings, onRescore }: SetupBannersProps) {
   return (
     <>
       {!status.resume && (
@@ -52,6 +58,13 @@ export function SetupBanners({ status, onOpenSettings }: { status: Status; onOpe
         </div>
       )}
       {status.auth_warning && <div className="banner banner-warn">{status.auth_warning}</div>}
+      {status.outdated_scores > 0 && !status.search_running && (
+        <div className="banner">
+          {status.outdated_scores} job(s) were scored against an older version of your resume or profile.{" "}
+          <button className="link-button" onClick={onRescore}>Re-score them</button>
+          <span className="muted"> (uses Claude: about one request per 5 jobs)</span>
+        </div>
+      )}
     </>
   );
 }
