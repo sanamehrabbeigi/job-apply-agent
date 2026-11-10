@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -22,6 +22,7 @@ from ..search.companies import load_companies, save_companies, test_company, val
 from ..search.pipeline import refilter_jobs
 from ..search.quota import QuotaGuard, budgets_from_prefs
 from ..tailor import auth_warning
+from ..tailor_sessions import MissingResume, NotWaiting
 from ..timeutil import iso
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -37,6 +38,15 @@ class JobUpdate(BaseModel):
 
 class SearchRequest(BaseModel):
     sources: list[str] | None = None
+
+
+class Answer(BaseModel):
+    question: str
+    answer: str
+
+
+class AnswersBody(BaseModel):
+    answers: list[Answer]
 
 
 def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True) -> FastAPI:
@@ -245,6 +255,44 @@ def create_app(runtime: Runtime | None = None, *, start_scheduler: bool = True) 
             "last_run": runs[0] if runs else None,
             "counts": rt.db.counts(now()),
         }
+
+    # --- tailoring -------------------------------------------------------------------------
+
+    @app.post("/api/jobs/{job_id}/tailor", status_code=202)
+    async def start_tailor(job_id: int) -> dict[str, Any]:
+        try:
+            session = rt.tailor.start(job_id)
+        except KeyError:
+            raise HTTPException(404, "Job not found.") from None
+        except MissingResume as exc:
+            raise HTTPException(409, str(exc)) from None
+        return session.to_dict()
+
+    @app.get("/api/tailor/{session_id}")
+    def get_tailor(session_id: str) -> dict[str, Any]:
+        session = rt.tailor.sessions.get(session_id)
+        if session is None:
+            raise HTTPException(404, "Tailoring run not found.")
+        return session.to_dict()
+
+    @app.post("/api/tailor/{session_id}/answers")
+    async def answer_tailor(session_id: str, body: AnswersBody) -> dict[str, Any]:
+        try:
+            rt.tailor.answer(session_id, [(a.question, a.answer) for a in body.answers])
+        except KeyError:
+            raise HTTPException(404, "Tailoring run not found.") from None
+        except NotWaiting as exc:
+            raise HTTPException(409, str(exc)) from None
+        await asyncio.sleep(0)
+        return rt.tailor.sessions[session_id].to_dict()
+
+    @app.get("/api/files/{file_path:path}")
+    def download(file_path: str) -> FileResponse:
+        root = paths.output_dir().resolve()
+        target = (root / file_path).resolve()
+        if root not in target.parents or not target.is_file():
+            raise HTTPException(404, "File not found.")
+        return FileResponse(target, filename=target.name)
 
     # --- UI ------------------------------------------------------------------------------
 

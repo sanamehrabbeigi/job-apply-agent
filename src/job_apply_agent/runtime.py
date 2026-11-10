@@ -17,6 +17,7 @@ from .search.events import EventBus
 from .search.http import Http
 from .search.pipeline import CandidateDocs, SearchRunner
 from .search.scheduler import Scheduler
+from .tailor_sessions import TailorManager
 from .timeutil import now_utc
 
 
@@ -26,6 +27,7 @@ class Runtime:
     events: EventBus
     runner: SearchRunner
     scheduler: Scheduler
+    tailor: TailorManager
     now: Callable[[], datetime]
 
 
@@ -61,4 +63,5 @@ def build_runtime(*, db: Database | None = None, sources=None, scorer=None, http
         now_fn=now_fn,
     )
     scheduler = Scheduler(runner, db, load_preferences, now_fn=now_fn)
-    return Runtime(db=db, events=events, runner=runner, scheduler=scheduler, now=now_fn)
+    tailor = TailorManager(db, events, load_prefs=load_preferences)
+    return Runtime(db=db, events=events, runner=runner, scheduler=scheduler, tailor=tailor, now=now_fn)
